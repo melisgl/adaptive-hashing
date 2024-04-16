@@ -1,0 +1,66 @@
+diff --git a/src/code/target-hash-table.lisp b/src/code/target-hash-table.lisp
+index 0c86238ed..94a5994db 100644
+--- a/src/code/target-hash-table.lisp
++++ b/src/code/target-hash-table.lisp
+@@ -154,12 +154,15 @@
+ ;;; This is equivalent to the old way of calling PREFUZZ-HASH on
+ ;;; POINTER-HASH because HASH from GET-LISP-OBJ-ADDRESS is shifted
+ ;;; here an extra SB-VM:N-FIXNUM-TAG-BITS.
+-(define-eq-hash (eq-hash eq-hash*) (address)
++(define-eq-hash (eq-hash/non-adaptive eq-hash/non-adaptive*) (address)
+   (+ (logxor #b11100101010001011010100111
+              (ash address #.(- sb-vm:n-fixnum-tag-bits)))
+      (ash address #.(- (+ 3 sb-vm:n-fixnum-tag-bits)))
+      (ash address #.(- (+ 12 sb-vm:n-fixnum-tag-bits)))
+      (ash address #.(- (+ 20 sb-vm:n-fixnum-tag-bits)))))
++
++(define-eq-hash (eq-hash eq-hash*) (address)
++  (murmur3-fmix-word address))
+ 
+ 
+ ;;; EQL, EQUAL and EQUALP hash functions
+@@ -208,7 +211,7 @@
+                    (number-sxhash (truly-the number key))))
+               nil)
+       ;; Consider picking off %INSTANCEP too before using EQ-HASH ?
+-      (eq-hash key)))
++      (eq-hash/non-adaptive key)))
+ 
+ ;;; Decide if WIDETAG (an OTHER-POINTER) should use SXHASH in EQUAL-HASH
+ (defmacro equal-hash-sxhash-widetag-p (widetag)
+@@ -265,7 +268,7 @@
+                (values (clip-hash (symbol-hash (truly-the symbol key))) nil))
+              (equal-hash-sxhash-widetag-p (%other-pointer-widetag key)))))
+       (values (clip-hash (sxhash key)) nil)
+-      (eq-hash key)))
++      (eq-hash/non-adaptive key)))
+ 
+ (defun equalp-hash (key)
+   (declare (values fixnum boolean))
+@@ -279,7 +282,7 @@
+     ;; since STRUCTURE-OBJECT is recursed into by PSXHASH.
+     (instance (values (clip-hash (instance-sxhash key)) nil))
+     (t
+-     (eq-hash key))))
++     (eq-hash/non-adaptive key))))
+ 
+ ;;;; user-defined hash table tests
+ 
+@@ -1058,7 +1061,7 @@ multiple threads accessing the same hash-table without locking."
+                                ;; Use the existing hash value (not
+                                ;; address-based hash).
+                                stored-hash
+-                               (eq-hash* key))))
++                               (eq-hash/non-adaptive* key))))
+                 (push-in-chain (mask-hash hash mask))))))))
+   ;; This is identical to the calculation of next-free-kv in INSERT-AT.
+   ;;
+@@ -1129,7 +1132,7 @@ multiple threads accessing the same hash-table without locking."
+                   (let* ((stored-hash (aref hash-vector i))
+                          (hash (if (/= stored-hash +magic-hash-vector-value+)
+                                    stored-hash
+-                                   (eq-hash* pair-key))))
++                                   (eq-hash/non-adaptive* pair-key))))
+                     (push-in-chain (mask-hash hash mask)))))))
+            ((eq (hash-table-test table) 'eql)
+             (let ((mask (1- (length index-vector))))

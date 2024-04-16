@@ -1,0 +1,63 @@
+%%
+%% This is file `noindentafter.sty',
+%% generated with the docstrip utility.
+%%
+%% The original source files were:
+%%
+%% noindentafter.dtx  (with options: `package,identify')
+%% noindentafter.dtx  (with options: `package,body')
+%% 
+%% noindentafter -- purposefully prevention of paragraph indentation
+%% 
+%% ----------------------------------------------------------------------------
+%%
+%% Copyright (C) Michiel Helvensteijn, 2014-2021
+%% Copyright (C) Falk Hanisch <hanisch.latex@outlook.com>, 2021-2021
+%%
+%% ----------------------------------------------------------------------------
+%%
+%% This work may be distributed and/or modified under the conditions of the
+%% LaTeX Project Public License, version 1.3c of the license. The latest
+%% version of this license is in
+%%     http://www.latex-project.org/lppl.txt
+%% and version 1.3c or later is part of all distributions of
+%% LaTeX version 2008-05-04 or later.
+%%
+%% This work has the LPPL maintenance status "author-maintained".
+%%
+%% The current maintainer and author of this work is Falk Hanisch.
+%%
+%% This work consists of the main source file README.md, LICENSE.md,
+%% noindentafter.dtx and the derived documentation noindentafter.pdf
+%%
+%% ----------------------------------------------------------------------------
+%%
+\NeedsTeXFormat{LaTeX2e}[2020-10-01]
+\ProvidesPackage{noindentafter}
+  [2021-05-14 v1.00 purposefully prevention of paragraph indentation]
+\RequirePackage{etoolbox}
+\RequirePackage{xpatch}
+\newcommand*\nia@scan{%
+  \kernel@ifnextchar\par{%
+    \par%
+    \def\par{%
+      \everypar{\setbox\z@\lastbox\everypar{}}%
+      \@restorepar%
+    }%
+  }{}%
+}
+\newcommand*\nia@afterendenv{}
+\def\nia@afterendenv#1\ignorespaces\fi{#1\ignorespaces\fi\nia@scan}
+\newrobustcmd*\NoIndentAfterThis{\nia@scan\par}
+\newcommand*\NoIndentAfterCmd[1]{%
+  \xapptocmd#1{\NoIndentAfterThis}{}{%
+    \PackageWarning{noindentafter}{%
+      Patching `\string#1' failed!\MessageBreak%
+      `\string\NoIndentAfterCmd{\string#1}' won't work%
+    }%
+  }%
+}
+\newcommand*\NoIndentAfterEnv[1]{\AfterEndEnvironment{#1}{\nia@afterendenv}}
+\endinput
+%%
+%% End of file `noindentafter.sty'.

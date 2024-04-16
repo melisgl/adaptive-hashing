@@ -1,0 +1,263 @@
+%%% TODO
+%
+%% - Turn all skips into multipliers so that the user can override
+%%   (with reason, mostly stick to integer multipliers).
+%
+%% - Patch environments and stuff only if those things are loaded. Do
+%%   it AtBeginDocument?
+%
+%% - Make it easy to add/override inits to groundlevel so that the use
+%%   can extend it with skips that I didn't think of. Or just move
+%%   them?
+%
+%% - List seps are innefective. Go through enumitem?
+%
+%% - Propositions are followed by two blank lines.
+
+\NeedsTeXFormat {LaTeX2e}
+\ProvidesPackage {ground}
+
+\newif\ifground@showframe\ground@showframefalse
+\DeclareOption{showframe}{\ground@showframetrue}
+\DeclareOption{showgrid}{\AtBeginDocument{\groundshowgrid}}
+\ProcessOptions
+
+
+%%%% The package option `showframe` draw a box around the minipage
+%%%% wrapped around grounded stuf.
+
+\newsavebox{\ground@cfboxbox}
+\newcommand{\ground@cfbox}[2][green]{%
+  \mbox{%
+    \sbox{\ground@cfboxbox}{#2}%
+    \setlength{\fboxsep}{-0.0001pt}% don't add space
+    \setlength{\fboxrule}{0.0001pt}%
+    \color{#1}%
+    \fbox{\usebox{\ground@cfboxbox}}%
+  }%
+}
+
+\newcommand{\ground@maybeframe}[2][green]{%
+  \ifground@showframe
+    \ground@cfbox[#1]{#2}%
+  \else
+    #2%
+  \fi}
+
+
+%%%% The package option `showgrid` and \groundshowgrid draw the
+%%%% baselines in the text area on all pages. Helps debug alignment
+%%%% issues.
+
+\RequirePackage{atbegshi}
+\newcommand{\groundshowgrid}{%
+  \AtBeginShipout{%
+    \AtBeginShipoutUpperLeft{%
+      \color{red!30}%
+      \put(\dimexpr 1in+\oddsidemargin,
+      -\dimexpr 1in+\topmargin+\headheight+\headsep+\topskip)%
+      {%
+        \vtop to\dimexpr\textheight + 2\groundskip{
+          \hrule
+          \leaders\vbox to \groundskip{\hrule width\textwidth\vfill}\vfill}}}}}
+
+
+\RequirePackage{xparse}
+\RequirePackage{xcolor}
+\RequirePackage{calc}
+\RequirePackage{ifthen}
+
+\RequirePackage{expl3}
+\ExplSyntaxOn
+\cs_new_eq:NN \ground@fptodim \fp_to_dim:n
+\ExplSyntaxOff
+
+\def\groundprop{0.7}
+
+\newlength{\groundskip}
+\newlength{\ground@xxx}
+\newlength{\ground@spaceused}
+\newlength{\ground@correction}
+\newlength{\ground@spacerequired}
+\newlength{\ground@remainingonpage}
+\newsavebox{\ground@box}
+\NewDocumentEnvironment {ground} {O{false} O{\groundprop} +b}
+  {%
+    \def\ground@topprop{#2}%
+    \ifhmode\def\wasinhmode{1}\else\def\wasinhmode{0}\fi%
+    \par%
+    % There can be negative prevdepths, but -1000pt means no interline
+    % glue, please.
+    \ifdim \the\prevdepth=-1000pt%
+      \setlength{\ground@spaceused}{0pt}%
+    \else%
+      \setlength{\ground@spaceused}{\the\prevdepth}%
+    \fi%
+%%     % If at the top of the page, the line with prevdepth is on the
+%%     % previous page, in which case \ground@spaceused should be zero. I
+%%     % don't know how to do that, so let's just make it true.
+%%     \vspace{-\ground@spaceused} \vspace*{+\ground@spaceused}%
+    % Prevent glue, for example, after lines with no descenders.
+    \nointerlineskip\par%
+    \noindent%
+    \begin{lrbox}{\ground@box}%
+      \begin{minipage}{\linewidth}%
+        \nointerlineskip\par #3}
+  {   \end{minipage}%
+    \end{lrbox}%
+    \setlength{\ground@spacerequired}{\ht\ground@box + \dp\ground@box}%
+    \ground@setremainingonpage{}%
+    \ifdim \ground@spacerequired > \ground@remainingonpage%
+      % Setting #3 without the minipage so that it can be broken
+      % across pages would be the right thing to do, but it doesn't
+      % compile.
+      %% #3\par\touchground%
+      %% \setlength{\prevdepth}{0pt}%
+      \ground@maybeframe{\usebox\ground@box}%
+      \setlength{\ground@spaceused}{
+        \ground@fptodim{\ht\ground@box + \dp\ground@box}}%
+      \setlength{\ground@correction}{
+        \ground@fptodim{
+          % The 0.00001 is intended to avoid skipping an extra line due
+          % to floating point inaccuracy.
+          ceil(\ground@spaceused / \groundskip - 0.00001) * \groundskip
+               - \ground@spaceused}}%
+      \vspace*{\ground@correction}%
+    \else%
+      % The minipage will fit on the page. Make sure that the
+      % correction doesn't push it over.
+      \setlength{\ground@spaceused}{
+        \ground@fptodim{\ground@spaceused + \ht\ground@box + \dp\ground@box}}%
+      \setlength{\ground@correction}{
+        \ground@fptodim{
+          % The 0.00001 is intended to avoid skipping an extra line due
+          % to floating point inaccuracy.
+          ceil(\ground@spaceused / \groundskip - 0.00001) * \groundskip
+               - \ground@spaceused}}%
+      \setlength{\ground@correction}{
+        \ground@fptodim{min(\ground@correction, \ground@remainingonpage
+                                                - \ground@spacerequired)}}%
+      \setlength{\ground@xxx}
+                {\ground@fptodim{\ground@correction*\ground@topprop}}%
+%%       \the\ground@xxx, \the\ground@correction, \the\ground@remainingonpage, \the\ground@spacerequired, \the\textheight, \the\pagetotal, \the\pagegoal
+      \vspace*{\ground@xxx}\par\nointerlineskip\noindent%
+      \ground@maybeframe{\usebox\ground@box}%
+      \setlength{\ground@xxx}{\ground@fptodim{
+          \ground@correction*(1-\ground@topprop)}}%
+      \vspace{\ground@xxx}%
+    \fi
+    \par\setlength{\prevdepth}{0pt}%
+    \ifnum\wasinhmode=1 \noindent\ignorespacesafterend \fi}
+
+\NewDocumentCommand {\ground@setremainingonpage} {} {%
+  % https://tex.stackexchange.com/questions/669361/problem-with-pagegoal
+  \ifdim \pagegoal = \maxdimen%
+    \setlength{\ground@remainingonpage}{\textheight-\pagetotal}%
+  \else%
+    \setlength{\ground@remainingonpage}{\pagegoal-\pagetotal}%
+  \fi%
+}
+
+\newlength{\proofsep}
+\newcommand{\groundlevel}[1][\baselineskip]{
+  \setlength{\groundskip}{#1}
+  \setlength{\parskip}{0pt}
+  \setlength{\parindent}{\groundskip}
+  \setlength{\topskip}{\groundskip}
+  \setlength{\topsep}{\groundskip}
+  \setlength{\itemsep}{0pt}
+  \setlength{\parsep}{0pt}
+  \setlength{\partopsep}{\groundskip}
+  \setlength{\abovedisplayskip}{0\groundskip}
+  \setlength{\belowdisplayskip}{0\groundskip}
+  \setlength{\abovedisplayshortskip}{0pt}
+  \setlength{\belowdisplayshortskip}{0pt}
+  \setlength{\textfloatsep}{1\groundskip}
+  \setlength{\floatsep}{1\groundskip}
+  \setlength{\intextsep}{1\groundskip}
+  \setlength{\dbltextfloatsep}{\groundskip}
+  \setlength{\dblfloatsep}{\groundskip}
+%%   \setlength{\lineskiplimit}{-\maxdimen}
+  \setlength{\lineskip}{\groundskip}
+  \setlength{\bibsep}{\groundskip}
+%%   % No need to set this.
+%%   % \setlength{\jot}{0pt}
+  \setlength{\proofsep}{0\groundskip}
+  \def\thm@space@setup{%
+    \thm@preskip=\groundskip
+    \thm@postskip=\groundskip
+  }
+  \raggedbottom
+}
+
+\AtBeginDocument{
+  \groundlevel
+}
+
+
+\NewDocumentCommand {\buryinground} {O{false} O{\groundprop} m}{%
+  \BeforeBeginEnvironment{#3}{\begin{ground}[#1][#2]}
+  \AfterEndEnvironment{#3}{\end{ground}}}
+
+\RequirePackage{amsmath}
+
+\buryinground{equation}
+\buryinground[true]{equation*}
+\buryinground{align}
+\buryinground[true]{align*}
+\buryinground{gather}
+\buryinground[true]{gather*}
+
+%% Float environments must be top-level. Inject the ground environment
+%% instead instead of wrapping them.
+
+\RequirePackage{algorithm}
+\RequirePackage{environ}
+\RequirePackage{etoolbox}
+
+\NewDocumentCommand {\floatground} {O{false} O{\groundprop} m}{%
+  \NewEnviron{ground@#3}[1][t]{%
+    \@float{#3}[##1]
+      \let\xBODY\BODY
+      \begin{ground}[#1][#2]
+        \xBODY
+      \end{ground}
+    \end@float}
+  \renewenvironment{#3}
+                   {\csuse{ground@#3}}
+                   {\csuse{endground@#3}}}
+
+\NewDocumentCommand {\dblfloatground} {O{false} O{\groundprop} m m}{%
+  \NewEnviron{ground@#3star}[1][t]{%
+    \@dblfloat{#3}[##1]
+      \let\xBODY\BODY
+      \begin{ground}[#1][#2]
+        \xBODY
+      \end{ground}
+    \end@dblfloat}
+  \renewenvironment{#4}
+                   {\csuse{ground@#3star}}
+                   {\csuse{endground@#3star}}}
+
+\floatground[false][0]{algorithm}
+\floatground[false][0]{table}
+\floatground[false][0]{figure}
+\dblfloatground[false][0]{algorithm}{algorithm*}
+\dblfloatground[false][0]{table}{table*}
+\dblfloatground[false][0]{figure}{figure*}
+
+% Make the proof environment use the newly introduced proofsep.
+% For some reason, \qed goes missing if we do this too early.
+\AtBeginDocument{
+  \RequirePackage{amsthm}
+  \renewenvironment{proof}[1][\proofname]{\par
+    \pushQED{\qed}%
+    \normalfont \topsep \proofsep
+    \trivlist
+    \item[\hskip\labelsep
+          \itshape
+      #1\@addpunct{.}]\ignorespaces
+  }{%
+    \popQED\endtrivlist\@endpefalse
+  }
+}

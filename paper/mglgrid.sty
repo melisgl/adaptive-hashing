@@ -1,0 +1,344 @@
+\ProvidesPackage {mglgrid}
+
+\RequirePackage{etoolbox}
+
+%%%% Language
+
+\RequirePackage[UKenglish]{babel}
+\renewcommand\UKenglishhyphenmins{22}
+\frenchspacing
+
+
+%%%% Spacing
+
+\def\debuglayout{0}
+
+\ifnum \debuglayout = 1
+  % Mark overfull boxes in output
+  \setlength{\overfullrule}{5pt}
+  \RequirePackage{showframe}
+  \RequirePackage[showframe,showgrid]{ground}
+  %% \RequirePackage{lua-visual-debug}
+\else
+  \RequirePackage{ground}
+%%   % Without the ground package
+%%   \newcommand{\groundskip}{\baselineskip}
+%%   \newcommand{\groundlevel}{}
+\fi
+
+\RequirePackage{ifxetex}
+\ifpdftex
+  \RequirePackage[spacing=true]{microtype}
+\else
+  \RequirePackage{microtype}
+\fi
+
+
+\RequirePackage[verbose=true,letterpaper]{geometry}
+\AtBeginDocument{
+  %% FIXME: narrower for onecolumn. A4?
+  \newgeometry{
+    % textheight = paperwidth
+    textheight=8.5in,
+    % textwidth/paperwidth = textheight/paperheight
+    textwidth=6.57in,
+    top=1.25in,
+    headheight=12pt,
+    headsep=25pt,
+    footskip=30pt
+  }
+  \setlength{\columnsep}{\ground@fptodim{1.5*\groundskip}}
+}
+
+\widowpenalty=10000
+\clubpenalty=10000
+
+
+%%%% Document title
+
+\newcommand{\subtitle}[1]{\def\@subtitle{#1}}
+
+\RequirePackage{titling}
+
+%% https://tex.stackexchange.com/questions/130762/prl-style-horizontal-line-in-latex
+\newcommand{\PRLsep}{\noindent\makebox[\linewidth]{\resizebox{0.33\linewidth}{1pt}{$\bullet$}}}
+
+\def\@maketitle{%
+  \newpage
+  \null
+  \begin{ground}
+    {\centering \fontsize{16pt}{24pt} \titlefont \textls[100]{\MakeUppercase{\@title}} \par}
+    \ifdef{\@subtitle}
+          {\vspace*{0.5\groundskip} \centering \PRLsep \vspace*{0.5\groundskip} \par \fontsize{13pt}{18pt} \titlefont \@subtitle \par}
+          {}
+    {\vspace*{2\groundskip}\centering\fontsize{11pt}{14pt}\titlefont \@author \par}
+  \end{ground}
+  \vspace*{3\groundskip}}
+
+
+%%%% Abstract
+
+\@ifclassloaded{article}%
+  {\RequirePackage{quoting}
+   \quotingsetup{vskip=\groundskip,indentfirst=false}
+   \renewenvironment{abstract}{%
+     \if@twocolumn
+       \section*{\abstractname}%
+     \else
+       {\centering\normalfont\normalsize\sc\MakeLowercase{\abstractname}\par}
+       \vspace{\groundskip}
+       \ground
+       \small
+       \quoting
+     \fi}
+     {\if@twocolumn\else\endquoting\endground\fi}
+  }%
+  {}%
+
+
+%%%% Titles of Chapters, *Sections, Figures, Tables
+
+\newcommand{\titlefont}{}
+\newcommand{\titleliningnums}[1]{#1}
+
+\newcommand{\chapterstyle}{\color{gray!180}\normalsizerr}
+\newcommand{\chaptertitle}[1]{\textls[180]{\MakeUppercase{#1}}}
+%% \RequirePackage{fancyhdr}
+%% \pagestyle{plain}
+%% \fancyhead{}
+%% %% % This letter spacing affects the headers after the first page of the
+%% %% % bibliography.
+%% %% \fancyhead[L]{\textls[150]{\leftmark}}
+%% \renewcommand{\headrulewidth}{0pt}
+%% \fancyhead[L]{}
+%% \renewcommand{\chaptermark}[1]{\markboth{\MakeUppercase{#1}}{}}
+
+\RequirePackage[explicit]{titlesec}
+\RequirePackage{titling}
+\titleformat{\chapter}[block]
+            {}
+            {\chapterstyle \liningnums{\thechapter} \quad \chaptertitle{#1}}
+            {0pt}{}
+            [{\rule[0.25\groundskip]{\textwidth}{0.2pt}}]
+\titleformat{name=\chapter,numberless}[block]
+            {}
+            {{\chapterstyle \chaptertitle{#1}}}
+            {0.5em}{}
+            [{\rule[0.25\groundskip]{\textwidth}{0.2pt}}]
+\titlespacing*{\chapter}{0pt}{0pt}{1\groundskip}
+
+
+\titleformat{\section}[block]
+            {\normalfont\normalsize}
+            {{\sc\MakeLowercase{\thesection}}}
+            {12pt}
+            {{\sc\normalsize\textls[100]{\MakeLowercase{#1}}}}
+\titlespacing*{\section}{0pt}{\groundskip}{\groundskip}
+
+
+\titleformat{\subsection}[block]
+            {\normalfont\normalsize}
+            {{\sc\MakeLowercase{\thesubsection}}}
+            {12pt}
+            {\emph{#1}}
+\titlespacing*{\subsection}{0pt}{\groundskip}{\groundskip}
+
+\titleformat{\subsubsection}[block]
+            {\normalfont\normalsize}
+            {{\sc\MakeLowercase{\thesubsubsection}}}
+            {12pt}
+            {#1}
+\titlespacing*{\subsubsection}{0pt}{\groundskip}{\groundskip}
+
+\RequirePackage{titletoc}
+\newcommand{\mgltocpage}{%
+  \nobreak\hspace{1em}\nobreak\color{mglred}\textit{\thecontentspage}}
+\contentsmargin{0pt}
+\titlecontents{chapter}[1.5em]
+              % Skip a line before numbered chapters except the first.
+              {\ifnum 0\thecontentslabel<2 \else \addvspace{\groundskip}\fi}
+              % Make bibliography section numbers like 3.A look nice
+              % by making 'A' match oldstyle figures.
+              {\contentslabel[\sc\MakeLowercase{\thecontentslabel}]{1.5em}%
+                \sc\textls[100]}
+              {\sc\textls[100]}
+              {\mgltocpage}
+\titlecontents{section}[3.8em]
+              {}
+              {\contentslabel[\sc\MakeLowercase{\thecontentslabel}]{2.3em}}
+              {}
+              {\mgltocpage}
+\titlecontents{subsection}[6.1em]
+              {}
+              {\contentslabel[\sc\MakeLowercase{\thecontentslabel}]{2.3em}}
+              {}
+              {\mgltocpage}
+\titlecontents{figure}[2.3em]
+              {}
+              {\contentslabel[\sc\MakeLowercase{\thecontentslabel}]{2.3em}}
+              {}
+              {\mgltocpage}
+\titlecontents{table}[2.3em]
+              {}
+              {\contentslabel[\sc\MakeLowercase{\thecontentslabel}]{2.3em}}
+              {}
+              {\mgltocpage}
+
+%https://tex.stackexchange.com/questions/121879/remove-spacing-between-per-chapter-figures-in-lof
+\RequirePackage{etoolbox}% http://ctan.org/pkg/etoolbox
+\makeatletter
+% \patchcmd{<cmd>}{<search>}{<replace>}{<succes>}{<failure>}
+\patchcmd{\@chapter}{\addtocontents{lof}{\protect\addvspace{10\p@}}}{}{}{}% LoF
+\patchcmd{\@chapter}{\addtocontents{lot}{\protect\addvspace{10\p@}}}{}{}{}% LoT
+\makeatother
+
+% Include the bibliography in the table of contents.
+\RequirePackage[nottoc,notlot,notlof]{tocbibind}
+
+% Some numbered subsections are just not important enough to include
+% them in the toc.
+\newcommand{\nocontentsline}[3]{}
+\newcommand{\tocless}[2]{\bgroup\let\addcontentsline=\nocontentsline#1{#2}\egroup}
+
+
+%%%% Beginning and end of chapters
+
+\newcommand{\mglepigraph}[3]{%
+  \begin{ground}
+    \flushright
+    \begin{minipage}[t]{#1\textwidth}
+      \fontsize{10.25pt}{12.5pt}\selectfont
+      #2
+      \par\xdef\tpd{\the\prevdepth}
+    \end{minipage}
+    \par\prevdepth\tpd
+    \vspace{0.5\groundskip}
+    \emph{\titlefont #3}
+  \end{ground}
+  \vspace{\groundskip}}
+
+\RequirePackage{lettrine}
+\newcommand{\mgllettrine}[3]{%
+  \noindent
+  \lettrine[lines=3, loversize=\fontloversize, #1]
+           {\titlefont\color{mglred}\smash{#2}}{\textls[100]{#3}}}
+
+%% \newcommand{\mglconclusion}{%
+%%   \mgllettrine{loversize=-0.05,lraise=0.15,lhang=0.1,
+%%     findent=0.2em,nindent=-0.05em,slope=-0.35em}{\textit{\S}}{}
+%% }
+
+%% \newcommand{\mglconclusion}{%
+%%   \mgllettrine{loversize=-0.05,lraise=0.15,lhang=1.2,
+%%     findent=0.05em,nindent=0.31em,slope=0.0em}{\S}{}
+%% }
+
+\newcommand{\mglconclusion}{%
+  \mgllettrine{loversize=-0.05,lraise=0.15,lhang=1.3,
+    findent=0.28em,nindent=0.31em,slope=0.0em}{\S}{}
+}
+
+%% \newcommand{\mglconclusion}{%
+%%   \mgllettrine{loversize=-0.25,lraise=0.26,lhang=1.2,
+%%     findent=-0.10em,nindent=0.31em,slope=0.0em}{|}{}
+%% }
+
+\newcommand{\mglsep}[1][mgl.png]{%
+  \vspace{\groundskip-\prevdepth}%
+  {\centering\includegraphics[height=2\groundskip]{#1}\par}}
+
+
+%%%% Fonts (lots of options)
+
+\RequirePackage[utf8]{inputenc}
+\RequirePackage{setspace}
+
+%% % Times
+%% \RequirePackage[p,osf]{newtx}
+%% \renewcommand{\titlefont}{}
+%% \RequirePackage{letltxmacro}
+%% \LetLtxMacro\titleliningnums\liningnums
+%% \RequirePackage[fontsize=10pt]{fontsize}
+%% %% \baselineskip 12pt: (/ 12 10 1.208) = 0.99337
+%% \setstretch{0.99337}
+
+% XCharter
+\ifpdftex
+  % With pdflatex, otfmath is not supported.
+  \RequirePackage[osf,scosf]{XCharter}
+  % Hack for Arxiv, which has an old XCharter.
+  \ifdef{\useproportional}{\useproportional}{}
+  \RequirePackage[charter,smallerops,varbb,scaled=1.05]{newtxmath}
+  \RequirePackage[cal=cm]{mathalfa}
+  % (* (/ 13.5 12) (/ 11.2265 12)) = 1.0524843
+  \RequirePackage[p,osf,scaled=1.0524843]{ebgaramond}
+\else
+  \RequirePackage[no-math]{fontspec}
+  % (* (/ 13.5 12) (/ 11.2265 12)) = 1.0524843
+  \RequirePackage[p,osf,scaled=1.0524843]{ebgaramond}
+  \RequirePackage[xcharter,p,osdf,scosf,smallerops,varbb,mathscale=1.05]{newtx}
+\fi
+\renewcommand{\titlefont}{\ebgaramond}
+\RequirePackage{letltxmacro}
+\LetLtxMacro\titleliningnums\liningnums
+%% \renewcommand{\titleliningnums}[1]{{\liningnums{#1}}}
+% This has the same x-height as 10pt Times New Roman.
+\RequirePackage[fontsize=9.355416pt]{fontsize}
+%% \baselineskip 12pt: (/ 12 9.355416 1.208)
+\setstretch{1.061820750080711}
+
+
+%%%% Misc
+
+\RequirePackage{anyfontsize}
+\RequirePackage[title]{appendix}
+\RequirePackage[shortlabels]{enumitem}
+\setlist{nosep,leftmargin=\groundskip}
+
+
+%%%% noindentafter.sty included because the version on Arxiv doesn't work
+
+\RequirePackage{noindentafter}
+\NoIndentAfterEnv{itemize}
+\NoIndentAfterEnv{enumerate}
+\NoIndentAfterEnv{proof}
+\NoIndentAfterEnv{definition}
+\NoIndentAfterEnv{theorem}
+\NoIndentAfterEnv{proposition}
+\NoIndentAfterEnv{corollary}
+\NoIndentAfterEnv{lemma}
+\NoIndentAfterEnv{assumption}
+\NoIndentAfterEnv{restatable}
+
+
+% Smaller bullets with hack for Arxiv
+\ifdef{\tinyrrr}
+      {\newlength{\mylen}
+        \setbox1=\hbox{$\bullet$}\setbox2=\hbox{\tinyrrr$\bullet$}
+        \setlength{\mylen}{\dimexpr0.5\ht1-0.5\ht2}
+        \renewcommand\labelitemi{\raisebox{\mylen}{\tinyrrr$\bullet$}}}
+      {\newlength{\mylen}
+        \setbox1=\hbox{$\bullet$}\setbox2=\hbox{\scriptsize$\bullet$}
+        \setlength{\mylen}{\dimexpr0.5\ht1-0.5\ht2}
+        \renewcommand\labelitemi{\raisebox{\mylen}{\scriptsize$\bullet$}}}
+
+
+%%%% amsthm must be loaded before cleveref
+
+\usepackage{mathtools}
+\let\openbox\relax
+\usepackage{amsthm}
+
+
+%%%% Citations, links, references
+
+\usepackage[authoryear]{natbib}
+\usepackage[hidelinks,linktoc=all]{hyperref}
+\DeclareTextFontCommand{\textin}{\initials}
+\usepackage{url}            % simple URL typesetting
+
+\usepackage[nameinlink]{cleveref}
+\Crefformat{chapter}{\S#2\scshape{\MakeLowercase{#1}}#3}
+\Crefformat{section}{\S#2\scshape{\MakeLowercase{#1}}#3}
+\Crefformat{subsection}{\S#2\scshape{\MakeLowercase{#1}}#3}
+\Crefformat{subsubsection}{\S#2\scshape{\MakeLowercase{#1}}#3}

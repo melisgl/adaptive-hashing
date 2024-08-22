@@ -54,6 +54,7 @@
 ;;;; - Multiple measurements in one FUNCALL / RUN-PROGRAM? (To reduce
 ;;;;   the RUN-PROGRAM overhead) (network protocol?)
 ;;;;
+;;;; - option for geometric averaging
 ;;;;
 ;;;; ----- Output -----
 ;;;;
@@ -67,6 +68,13 @@
 ;;;; - Control format (e.g. number of float digits)
 ;;;;
 ;;;; - Streaming table output (grow/resize columns as necessary)
+;;;;
+;;;; ----- Tests -----
+;;;;
+;;;; - Show that delta works better than absolute
+;;;;
+;;;; - Show that delta works better than beta
+
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (require :alexandria)
@@ -222,7 +230,47 @@
               (/ (value :system-run-time-us) 1000000 time-unit)
               (and (getf timing :gc-run-time-ms)
                    (/ (value :gc-run-time-ms) 1000 time-unit))))))
+
+(defun timing-filter-gc (timing measure-gc)
+  (if measure-gc
+      timing
+      (let ((timing (copy-list timing)))
+        (remf timing :gc-run-time-ms)
+        timing)))
 
+
+;;;; Commands
+
+(defun run-program* (command)
+  (uiop:with-temporary-file (:pathname output-file)
+    (multiple-value-bind (output error-output exit-code)
+        (uiop:run-program command :ignore-error-status t :output output-file
+                                  :error-output output-file)
+      (declare (ignore output error-output))
+      (unless (zerop exit-code)
+        (format t "Exit code ~S from command ~A~%Output:~%~A~%"
+                exit-code command
+                (alexandria:read-file-into-string output-file))
+        (sb-ext:exit :code exit-code :abort t)))))
+
+(defun command-name (command-names i)
+  (if (< i (length command-names))
+      (format nil "~3@A" (elt command-names i))
+      (format nil "~3D" (1+ i))))
+
+(defun commands-to-functions (commands command-names)
+  (loop for command in commands
+        for i upfrom 0
+        do (format t "Command ~A: ~A~%" (command-name command-names i)
+                   command)
+        collect (if (stringp command)
+                    (let ((command command))
+                      (lambda ()
+                        (run-program* command)))
+                    command)))
+
+
+;;;; Beta estimator
 
 ;;; Return the maximum Relative Standard Deviation (sqrt(var) / abs(mean)).
 (defun max-rsd (means variances)
@@ -245,50 +293,15 @@
 
 (defun print-heading (serial-no measure-gc)
   (if serial-no
-      (format t "#~2D" serial-no)
+      (format t "#~3D" serial-no)
       (format t "   "))
   (format t " cmd    real  +-rse%  stddev     cpu  +-rse%  stddev ~
              (   user +     sys~:[~;,      gc~])~%"
           measure-gc))
 
-(defun timing-filter-gc (timing measure-gc)
-  (if measure-gc
-      timing
-      (let ((timing (copy-list timing)))
-        (remf timing :gc-run-time-ms)
-        timing)))
-
-(defun run-program* (command)
-  (uiop:with-temporary-file (:pathname output-file)
-    (multiple-value-bind (output error-output exit-code)
-        (uiop:run-program command :ignore-error-status t :output output-file
-                                  :error-output output-file)
-      (declare (ignore output error-output))
-      (unless (zerop exit-code)
-        (format t "Exit code ~S from command ~A~%Output:~%~A~%"
-                exit-code command
-                (alexandria:read-file-into-string output-file))
-        (sb-ext:exit :code exit-code :abort t)))))
-
-(defun command-name (command-names i)
-  (if (< i (length command-names))
-      (format nil "~2@A" (elt command-names i))
-      (format nil "~2D" (1+ i))))
-
-(defun commands-to-functions (commands command-names)
-  (loop for command in commands
-        for i upfrom 0
-        do (format t "Command ~A: ~A~%" (command-name command-names i)
-                   command)
-        collect (if (stringp command)
-                    (let ((command command))
-                      (lambda ()
-                        (run-program* command)))
-                    command)))
-
-(defun time-interleaved (commands &key command-names (warmup 0) (runs 10)
-                                    max-runs max-rse shuffle
-                                    (measure-gc t) (time-unit *time-unit*))
+(defun time/beta (commands &key command-names (warmup 0) (runs 10)
+                                 max-runs max-rse shuffle
+                                 (measure-gc t) (time-unit *time-unit*))
   (let* ((fns (commands-to-functions commands command-names))
          (n-commands (length fns))
          (timings (make-array n-commands :initial-element ()))
@@ -312,17 +325,18 @@
                       (and max-rse (or (zerop run)
                                        (< max-rse (max-rse-of-timings
                                                    timings))))))))
-      (format t "~%Warming up~%")
-      (loop for run below warmup do
-        (terpri)
-        (print-heading (1+ run) measure-gc)
-        (loop for i in (command-indices)
-              do (print-command-name i :maybe-shuffled)
-                 (sb-ext:call-with-timing
-                  (lambda (&rest timing)
-                    (print-timing (timing-filter-gc (make-timing timing)
-                                                    measure-gc)))
-                  (elt fns i))))
+      (when (plusp warmup)
+        (format t "~%Warming up~%")
+        (loop for run below warmup do
+          (terpri)
+          (print-heading (1+ run) measure-gc)
+          (loop for i in (command-indices)
+                do (print-command-name i :maybe-shuffled)
+                   (sb-ext:call-with-timing
+                    (lambda (&rest timing)
+                      (print-timing (timing-filter-gc (make-timing timing)
+                                                      measure-gc)))
+                    (elt fns i)))))
       (format t "~%Benchmarking~%")
       (loop for run upfrom 0
             while (no-more-runs-p run timings)
@@ -348,9 +362,88 @@
     (map 'list #'estimate-mean timings)))
 
 #+nil
-(time-interleaved (list (lambda () (sleep (+ 0.075 (random 0.05))))
-                        (lambda () (sleep (+ 0.175 (random 0.05))))))
+(time/beta (list (lambda () (sleep (+ 0.075 (random 0.05))))
+                 (lambda () (sleep (+ 0.175 (random 0.05)))))
+                  
+           :measure-gc nil)
 
+
+;;;; Delta estimator
+
+(defun time/delta (commands &key command-names (warmup 0) (runs 10)
+                              (measure-gc t) (time-unit *time-unit*))
+  (let* ((fns (commands-to-functions commands command-names))
+         (n-commands (length fns))
+         (timings (make-array n-commands :initial-element ()))
+         (*time-unit* time-unit))
+    (flet ((command-indices ()
+             (alexandria:shuffle (alexandria:iota n-commands)))
+           (print-command-name (command-index kind &optional n)
+             (format t "~A ~A " (ecase kind
+                                  ((:shuffled) "shuf")
+                                  ((:mean) (format nil "#~3D" n))
+                                  ((:random) "rand"))
+                     (command-name command-names command-index))
+             (force-output))
+           (no-more-runs-p (timings)
+             (every (lambda (timings)
+                      (<= runs (length timings)))
+                    timings))
+           (min-n-runs (timings)
+             (loop for timings across timings
+                   minimizing (length timings))))
+      (when (plusp warmup)
+        (format t "~%Warming up~%")
+        (loop for run below warmup do
+          (terpri)
+          (print-heading run measure-gc)
+          (loop for i in (command-indices)
+                do (print-command-name i :shuffled)
+                   (sb-ext:call-with-timing
+                    (lambda (&rest timing)
+                      (print-timing (timing-filter-gc (make-timing timing)
+                                                      measure-gc)))
+                    (elt fns i)))))
+      (format t "~%Benchmarking~%")
+      (loop with run = 0
+            until (no-more-runs-p timings)
+            do (terpri)
+               (print-heading run measure-gc)
+               ;; Run commands until the minimum number of runs
+               ;; changes.
+               (let ((min-n-runs (min-n-runs timings)))
+                 (loop
+                   do (let* ((i (random n-commands))
+                             (fn (elt fns i)))
+                        (print-command-name i :random)
+                        (sb-ext:call-with-timing
+                         (lambda (&rest timing)
+                           (let ((timing (timing-filter-gc
+                                          (make-timing timing) measure-gc)))
+                             (print-timing timing)
+                             (push timing (aref timings i))))
+                         fn))
+                      (incf run)
+                   while (= min-n-runs (min-n-runs timings))))
+               (loop for i below n-commands
+                     do (let ((timings (aref timings i)))
+                          (print-command-name i :mean (length timings))
+                          (print-timing (estimate-mean timings))))))
+    (map 'list #'estimate-mean timings)))
+
+#+nil
+(time/delta (list (lambda () (sleep (+ 0.075 (random 0.05))))
+                  (lambda () (sleep (+ 0.175 (random 0.05)))))
+            :measure-gc nil)
+
+
+;;;; Benchmarks
+
+(defun benchmark-weight (benchmark)
+  (getf benchmark :weight 1))
+
+(defun benchmark-commands (benchmark)
+  (getf benchmark :commands))
 
 (defun blank-char-p (char)
   (member char '(#\Space #\Tab)))
@@ -358,6 +451,8 @@
 (defun blank-string-p (string)
   (every #'blank-char-p string))
 
+;;; Read consecutive non-blank lines as a list of commands. Weights
+;;; are not currently supported.
 (defun parse-benchmark-file (stream)
   (let ((benchmarks ()))
     (loop
@@ -368,12 +463,9 @@
           (return))
         (push (list :commands lines) benchmarks)))
     (reverse benchmarks)))
+
 
-(defun benchmark-weight (benchmark)
-  (getf benchmark :weight 1))
-
-(defun benchmark-commands (benchmark)
-  (getf benchmark :commands))
+;;;; Main entry point
 
 (defun time-sequentially (benchmarks time-it
                           &key command-names shuffle max-rse skip-high-rse
@@ -424,12 +516,13 @@
                        (1+ benchmark-index) n-skipped)
                (print-heading nil measure-gc)
                (print-command-totals command-timings/skip)))))))
+
 #+nil
 (time-sequentially `((:commands ,(list (lambda () (sleep 0.1))
                                        (lambda () (sleep 0.2))))
                      (:commands ,(list (lambda () (sleep 0.01))
                                        (lambda () (sleep 0.02)))))
-                   #'time-interleaved)
+                   #'time/beta)
 
 
 ;;;; Command line
@@ -503,12 +596,12 @@
                   warmup runs max-runs (* 100 max-rse) shuffle time-unit
                   command-names benchmark-file shuffle-benchmarks skip-high-rse)
           (flet ((time-it (commands)
-                   (time-interleaved commands
-                                     :command-names command-names
-                                     :warmup warmup :runs runs
-                                     :max-runs max-runs :max-rse max-rse
-                                     :shuffle shuffle
-                                     :measure-gc nil :time-unit time-unit)))
+                   (time/beta commands
+                              :command-names command-names
+                              :warmup warmup :runs runs
+                              :max-runs max-runs :max-rse max-rse
+                              :shuffle shuffle
+                              :measure-gc nil :time-unit time-unit)))
             (when commands
               (time-it commands))
             (when benchmark-file

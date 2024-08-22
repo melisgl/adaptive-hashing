@@ -71,7 +71,8 @@
 ;;;;
 ;;;; ----- Tests -----
 ;;;;
-;;;; - Show that delta works better than absolute
+;;;; - Show that delta works better than absolute: maybe don't control
+;;;;   cpu frequency?
 ;;;;
 ;;;; - Show that delta works better than beta
 
@@ -301,7 +302,7 @@
 
 (defun time/beta (commands &key command-names (warmup 0) (runs 10)
                                  max-runs max-rse shuffle
-                                 (measure-gc t) (time-unit *time-unit*))
+                                 measure-gc (time-unit *time-unit*))
   (let* ((fns (commands-to-functions commands command-names))
          (n-commands (length fns))
          (timings (make-array n-commands :initial-element ()))
@@ -363,15 +364,13 @@
 
 #+nil
 (time/beta (list (lambda () (sleep (+ 0.075 (random 0.05))))
-                 (lambda () (sleep (+ 0.175 (random 0.05)))))
-                  
-           :measure-gc nil)
+                 (lambda () (sleep (+ 0.175 (random 0.05))))))
 
 
 ;;;; Delta estimator
 
 (defun time/delta (commands &key command-names (warmup 0) (runs 10)
-                              (measure-gc t) (time-unit *time-unit*))
+                              measure-gc (time-unit *time-unit*))
   (let* ((fns (commands-to-functions commands command-names))
          (n-commands (length fns))
          (timings (make-array n-commands :initial-element ()))
@@ -433,8 +432,7 @@
 
 #+nil
 (time/delta (list (lambda () (sleep (+ 0.075 (random 0.05))))
-                  (lambda () (sleep (+ 0.175 (random 0.05)))))
-            :measure-gc nil)
+                  (lambda () (sleep (+ 0.175 (random 0.05))))))
 
 
 ;;;; Benchmarks
@@ -619,3 +617,24 @@
     ((or sb-sys:interactive-interrupt sb-int:broken-pipe) ()
       ;; 130=128+SIGINT
       (sb-ext:exit :code 130 :abort t))))
+
+
+;;;; Show that delta works better than absolute
+;;;;
+;;;; Plot delta vs number of runs? (repeated, with error bars)
+;;;;
+;;;; Needs geometric averaging
+
+(defun burn-cpu ()
+  (loop for i below 9999999999))
+
+#+nil
+(loop (burn-cpu))
+#+nil
+(time/delta (list (lambda () (burn-cpu))
+                  (lambda () (burn-cpu)))
+            :runs 20)
+
+#+nil
+(loop repeat 2 do
+  (time/delta (list (lambda () (burn-cpu))) :runs 20))

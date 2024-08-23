@@ -154,7 +154,7 @@
   (getf timing :n-measurements 1))
 
 ;;; 0s is measured sometimes ...
-(defvar *log-kludge* 0.001d0)
+(defparameter *log-kludge* 1d-7)
 
 (defun maybe-log (x logp)
   (cond ((not logp) x)
@@ -207,21 +207,24 @@
 ;;; values are summed in the log domain if GEOMETRICP (i.e.
 ;;; expsumlog).
 (defun sum-timings (timings geometricp)
-  (flet ((sum-values (key)
-           (maybe-exp (loop for timing in timings
-                            sum (maybe-log (timing-value timing key)
-                                           geometricp))
-                      geometricp))
-         (sum-uncertainties (key)
-           (loop for timing in timings
-                 sum (timing-uncertainty timing key))))
-    (let ((keys (loop for rest on (first timings) by #'cddr
-                      collect (first rest))))
-      (list* :n-measurements 1
-             (loop for key in keys
-                   unless (eq key :n-measurements)
-                     append (list key (cons (sum-values key)
-                                            (sum-uncertainties key))))))))
+  (let ((n (max 1 (length timings))))
+    (flet ((sum-values (key)
+             (maybe-exp (/ (loop for timing in timings
+                                 sum (maybe-log (timing-value timing key)
+                                                geometricp))
+                           n)
+                        geometricp))
+           (sum-uncertainties (key)
+             (/ (loop for timing in timings
+                      sum (timing-uncertainty timing key))
+                (expt n 2))))
+      (let ((keys (loop for rest on (first timings) by #'cddr
+                        collect (first rest))))
+        (list* :n-measurements 1
+               (loop for key in keys
+                     unless (eq key :n-measurements)
+                       append (list key (cons (sum-values key)
+                                              (sum-uncertainties key)))))))))
 
 (defvar *time-unit* 1)
 
@@ -482,7 +485,8 @@
 
 (defun time-sequentially (benchmarks time-it
                           &key command-names shuffle max-rse skip-high-rse
-                            (measure-gc t) geometricp (time-unit *time-unit*))
+                            (measure-gc t) (geometricp t)
+                            (time-unit *time-unit*))
   (let* ((benchmarks (if shuffle (alexandria:shuffle benchmarks) benchmarks))
          (n-commands (length (benchmark-commands (first benchmarks))))
          (command-timings (make-array n-commands :initial-element ()))
@@ -510,7 +514,7 @@
                   (skip-this-p (and skipp (< max-rse rse))))
              (when skip-this-p
                (format t "~%Final RSE too high. ~
-                         Skipping results of benchmark ~D.~%"
+                          Skipping results of benchmark ~D.~%"
                        (1+ benchmark-index))
                (incf n-skipped))
              (loop for i upfrom 0

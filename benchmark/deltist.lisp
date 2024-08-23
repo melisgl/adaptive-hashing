@@ -6,11 +6,7 @@
 ;;;; - Outliers? Real/CPU anomalies? It's impossible to detect
 ;;;;   outliers without modelling the source.
 ;;;;
-;;;; - If the RSE cannot decrease below MAX-RSE (given the current
-;;;;   MAX-RUNS), then either stop early or discard the most serious
-;;;;   outliers.
-;;;;
-;;;; - Why is max-rse based on real time?
+;;;; - Why is MAX-RSE based on real time?
 ;;;;
 ;;;; - Skewed distribution
 ;;;;
@@ -521,7 +517,8 @@
                    for timing in timings
                    do (unless skip-this-p
                         (push timing (aref command-timings i)))
-                      (push timing (aref command-timings/skip i)))
+                      (when skipp
+                        (push timing (aref command-timings/skip i))))
              ;; Print totals without skipped
              (format t "~%Totals after benchmark ~S" (1+ benchmark-index))
              (when (plusp n-skipped)

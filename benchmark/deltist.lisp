@@ -405,7 +405,7 @@
         (format t "~%Warming up~%")
         (loop for run below warmup do
           (terpri)
-          (print-heading run "B")
+          (print-heading (1+ run) "B")
           (loop for i in (command-indices)
                 do (print-command-name i :shuffled)
                    (with-timing #'print-timing
@@ -416,7 +416,7 @@
         (let ((min-n-runs (min-n-runs timings)))
           (when (<= runs min-n-runs)
             (return))
-          (print-heading min-n-runs "D")
+          (print-heading (1+ min-n-runs) "D")
           ;; Run commands until the minimum number of runs changes.
           (loop
             do (let* ((i (random n-commands))

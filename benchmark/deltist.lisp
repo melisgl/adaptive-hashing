@@ -327,7 +327,6 @@
        (sqrt (length (aref timings-vector 0))))))
 
 (defun time/beta (commands &key command-names (warmup 0) (runs 10)
-                             max-runs max-rse
                              measure-gc (geometricp t) (time-unit *time-unit*))
   (let* ((fns (commands-to-functions commands command-names))
          (n-commands (length fns))
@@ -342,27 +341,20 @@
                                   ((:ordered) "    ")
                                   ((:mean) (if geometricp "geom" "arit")))
                      (command-name command-names command-index))
-             (force-output))
-           (no-more-runs-p (run timings)
-             (and (or (null max-runs) (< run max-runs))
-                  (or (< run runs)
-                      (and max-rse (or (zerop run)
-                                       (< max-rse (max-rse-of-timings
-                                                   timings))))))))
+             (force-output)))
       (when (plusp warmup)
         (format t "~%Warming up~%")
         (loop for run below warmup do
           (terpri)
-          (print-heading (1+ run))
+          (print-heading (* run n-commands))
           (loop for i in (command-indices)
                 do (print-command-name i :shuffled)
                    (with-timing #'print-timing
                      (elt fns i)))))
       (format t "~%Benchmarking~%")
-      (loop for run upfrom 0
-            while (no-more-runs-p run timings)
+      (loop for run below runs
             do (terpri)
-               (print-heading (1+ run))
+               (print-heading (* run n-commands))
                (loop for i in (command-indices)
                      do (let ((fn (elt fns i)))
                           (print-command-name i :shuffled)

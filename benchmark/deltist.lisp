@@ -239,7 +239,7 @@
 (defun print-heading (serial-no &optional marker)
   (if serial-no
       (format t "~A~3D" marker serial-no)
-      (format t "   "))
+      (format t "    "))
   (format t " cmd    real  +-rse%  stddev     cpu  +-rse%  stddev ~
              (   user +     sys~:[~;,      gc~])~%"
           *print-timing-gc*))
@@ -440,6 +440,8 @@
                    (print-command-name i :mean (length timings))
                    (print-timing (estimate-mean timings geometricp))))
         (setq geometricp (not geometricp))))
+    (format t "Total runs: ~D~%" (loop for timings across timings
+                                       sum (length timings)))
     (map 'list (lambda (timings)
                  (estimate-mean timings geometricp))
          timings)))

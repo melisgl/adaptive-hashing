@@ -114,6 +114,33 @@
 
 ;;;; Timing
 
+;;; Add :RUN-TIME-US to PLIST to make it a TIMING. PLIST is the
+;;; argument list SB-EXT:CALL-WITH-TIMING calls its TIMER argument
+;;; with.
+(defun %make-timing (plist)
+  (let ((plist (copy-list plist)))
+    (setf (getf plist :run-time-us)
+          (cons (+ (timing-value plist :user-run-time-us)
+                   (timing-value plist :system-run-time-us))
+                (+ (timing-uncertainty plist :user-run-time-us)
+                   (timing-uncertainty plist :system-run-time-us))))
+    plist))
+
+;;; Like SB-EXT:CALL-WITH-TIMING, but TIMER is called with a TIMING.
+(defmacro with-timing (timer fn)
+  (alexandria:with-unique-names (args)
+    `(sb-ext:call-with-timing
+      (lambda (&rest ,args)
+        (funcall ,timer (%make-timing ,args)))
+      ,fn)))
+
+(defun timing-filter-gc (timing measure-gc)
+  (if measure-gc
+      timing
+      (let ((timing (copy-list timing)))
+        (remf timing :gc-run-time-ms)
+        timing)))
+
 (defun timing-value (timing key)
   (let ((x (if (functionp key)
                (funcall key timing)
@@ -133,15 +160,6 @@
     (or (and (consp x)
              (cdr x))
         0)))
-
-(defun make-timing (plist)
-  (let ((plist (copy-list plist)))
-    (setf (getf plist :run-time-us)
-          (cons (+ (timing-value plist :user-run-time-us)
-                   (timing-value plist :system-run-time-us))
-                (+ (timing-uncertainty plist :user-run-time-us)
-                   (timing-uncertainty plist :system-run-time-us))))
-    plist))
 
 (defun timing-n-measurements (timing)
   (getf timing :n-measurements 1))
@@ -231,13 +249,6 @@
               (/ (value :system-run-time-us) 1000000 time-unit)
               (and (getf timing :gc-run-time-ms)
                    (/ (value :gc-run-time-ms) 1000 time-unit))))))
-
-(defun timing-filter-gc (timing measure-gc)
-  (if measure-gc
-      timing
-      (let ((timing (copy-list timing)))
-        (remf timing :gc-run-time-ms)
-        timing)))
 
 
 ;;;; Commands
@@ -301,8 +312,8 @@
           measure-gc))
 
 (defun time/beta (commands &key command-names (warmup 0) (runs 10)
-                                 max-runs max-rse shuffle
-                                 measure-gc (time-unit *time-unit*))
+                             max-runs max-rse shuffle
+                             measure-gc (time-unit *time-unit*))
   (let* ((fns (commands-to-functions commands command-names))
          (n-commands (length fns))
          (timings (make-array n-commands :initial-element ()))
@@ -333,11 +344,10 @@
           (print-heading (1+ run) measure-gc)
           (loop for i in (command-indices)
                 do (print-command-name i :maybe-shuffled)
-                   (sb-ext:call-with-timing
-                    (lambda (&rest timing)
-                      (print-timing (timing-filter-gc (make-timing timing)
-                                                      measure-gc)))
-                    (elt fns i)))))
+                   (with-timing
+                       (lambda (timing)
+                         (print-timing (timing-filter-gc timing measure-gc)))
+                     (elt fns i)))))
       (format t "~%Benchmarking~%")
       (loop for run upfrom 0
             while (no-more-runs-p run timings)
@@ -346,13 +356,13 @@
                (loop for i in (command-indices)
                      do (let ((fn (elt fns i)))
                           (print-command-name i :maybe-shuffled)
-                          (sb-ext:call-with-timing
-                           (lambda (&rest timing)
-                             (let ((timing (timing-filter-gc
-                                            (make-timing timing) measure-gc)))
-                               (print-timing timing)
-                               (push timing (aref timings i))))
-                           fn)))
+                          (with-timing
+                              (lambda (timing)
+                                (let ((timing (timing-filter-gc timing
+                                                                measure-gc)))
+                                  (print-timing timing)
+                                  (push timing (aref timings i))))
+                            fn)))
                (when shuffle
                  (loop for i below n-commands
                        do (print-command-name i :ordered)
@@ -398,11 +408,10 @@
           (print-heading run measure-gc)
           (loop for i in (command-indices)
                 do (print-command-name i :shuffled)
-                   (sb-ext:call-with-timing
-                    (lambda (&rest timing)
-                      (print-timing (timing-filter-gc (make-timing timing)
-                                                      measure-gc)))
-                    (elt fns i)))))
+                   (with-timing
+                       (lambda (timing)
+                         (print-timing (timing-filter-gc timing measure-gc)))
+                     (elt fns i)))))
       (format t "~%Benchmarking~%")
       (loop with run = 0
             until (no-more-runs-p timings)
@@ -415,13 +424,13 @@
                    do (let* ((i (random n-commands))
                              (fn (elt fns i)))
                         (print-command-name i :random)
-                        (sb-ext:call-with-timing
-                         (lambda (&rest timing)
-                           (let ((timing (timing-filter-gc
-                                          (make-timing timing) measure-gc)))
-                             (print-timing timing)
-                             (push timing (aref timings i))))
-                         fn))
+                        (with-timing
+                            (lambda (timing)
+                              (let ((timing (timing-filter-gc timing
+                                                              measure-gc)))
+                                (print-timing timing)
+                                (push timing (aref timings i))))
+                          fn))
                       (incf run)
                    while (= min-n-runs (min-n-runs timings))))
                (loop for i below n-commands

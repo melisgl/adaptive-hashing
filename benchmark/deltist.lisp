@@ -595,6 +595,15 @@
           (the real (read-from-string value)))
         default)))
 
+(defun get-option-categorical-value (options option-name allowed-values
+                                     &optional default)
+  (let ((value (alexandria:assoc-value options option-name :test #'string=)))
+    (when value
+      (unless (member value allowed-values :test #'string=)
+        (error "Unexpected value ~A for option ~A.~%Not one of ~{~A~^,~}."
+               option-name value allowed-values)))
+    (or value default)))
+
 #+nil (parse-arguments '("-w" "1" "-r" "10" "--" "a" "b" "c"))
 #+nil (parse-arguments '("a" "b" "c"))
 
@@ -603,6 +612,9 @@
       (multiple-value-bind (options commands)
           (parse-arguments (rest sb-ext:*posix-argv*))
         (let ((*random-state* (make-random-state t))
+              (estimator (get-option-categorical-value options "--estimator"
+                                                       '("delta" "beta")
+                                                       "delta"))
               (warmup (get-option-integer-value options "--warmup" 1))
               (runs (get-option-integer-value options "--runs" 10))
               (max-runs (get-option-integer-value options "--max-runs" 40))
@@ -630,13 +642,16 @@
                   command-names benchmark-file shuffle-benchmarks skip-high-rse
                   geometricp)
           (flet ((time-it (commands)
-                   (time/beta commands
-                              :command-names command-names
-                              :warmup warmup :runs runs
-                              :max-runs max-runs :max-rse max-rse
-                              :shuffle shuffle
-                              :measure-gc nil :geometricp geometricp
-                              :time-unit time-unit)))
+                   (funcall (if (string= estimator "delta")
+                                #'time/delta
+                                #'time/beta)
+                            commands
+                            :command-names command-names
+                            :warmup warmup :runs runs
+                            :max-runs max-runs :max-rse max-rse
+                            :shuffle shuffle
+                            :measure-gc nil :geometricp geometricp
+                            :time-unit time-unit)))
             (when commands
               (time-it commands))
             (when benchmark-file

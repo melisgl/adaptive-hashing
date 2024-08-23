@@ -18,10 +18,6 @@
 ;;;; - Rerun a subset of benchmarks based on a previous run (e.g.
 ;;;;   where the biggest differences were)
 ;;;;
-;;;; - Detach from controlling terminal (so that output to
-;;;;   *TERMINAL-IO* is redirected to stdout, and stdin is not /dev/tty)
-;;;;   or use the script command?
-;;;;
 ;;;; - Track statistics with outliers too?
 ;;;;
 ;;;; - Document
@@ -283,8 +279,11 @@
 (defun run-program* (command)
   (uiop:with-temporary-file (:pathname output-file)
     (multiple-value-bind (output error-output exit-code)
-        (uiop:run-program command :ignore-error-status t :output output-file
-                                  :error-output output-file)
+        ;; https://stackoverflow.com/questions/4056075/how-to-redirect-a-program-that-writes-to-tty
+        (uiop:run-program (list "script" "-q" "-c" command "/dev/null")
+                          :ignore-error-status t :output output-file
+                          :error-output output-file
+                          :force-shell nil)
       (declare (ignore output error-output))
       (unless (zerop exit-code)
         (format t "Exit code ~S from command ~A~%Output:~%~A~%"

@@ -610,13 +610,10 @@
               (estimator (get-option-categorical-value options "--estimator"
                                                        '("delta" "beta")
                                                        "delta"))
-              (warmup (get-option-integer-value options "--warmup" 1))
-              (runs (get-option-integer-value options "--runs" 10))
-              (max-runs (get-option-integer-value options "--max-runs" 40))
-              (max-rse (get-option-real-value options "--max-rse" 0.001))
-              (shuffle (get-option-boolean-value options "--shuffle" nil))
               (geometricp (get-option-boolean-value options "--geometric" t))
               (time-unit (get-option-real-value options "--time-unit" 1))
+              (warmup (get-option-integer-value options "--warmup" 1))
+              (runs (get-option-integer-value options "--runs" 10))
               (command-names
                 (split-sequence:split-sequence
                  #\Space (get-option-string-value options "--command-names"
@@ -627,15 +624,15 @@
                                                        nil))
               (shuffle-benchmarks (get-option-boolean-value
                                    options "--shuffle-benchmarks" nil))
+              (max-rse (get-option-real-value options "--max-rse" 0.001))
               (skip-high-rse (get-option-boolean-value
                               options "--skip-high-rse" nil)))
-          (format t "~%warmup: ~S, runs: ~S, max-runs: ~S, max-rse: ~,1F%, ~
-                     shuffle: ~S, time-unit: ~Fs,~%~
-                     command-names: ~A, benchmark-file: ~S, ~
-                     shuffle-benchmarks: ~S, skip-high-rse: ~S, geometric: ~S~%"
-                  warmup runs max-runs (* 100 max-rse) shuffle time-unit
-                  command-names benchmark-file shuffle-benchmarks skip-high-rse
-                  geometricp)
+          (format t "~%estimator: ~A, geometric: ~S, time-unit: ~F sec, ~
+                     warmup: ~S, runs: ~S, ~%~
+                     benchmark-file: ~S, shuffle-benchmarks: ~S, ~
+                     max-rse: ~,1F, skip-high-rse: ~S~%"
+                  estimator geometricp time-unit warmup runs
+                  benchmark-file shuffle-benchmarks max-rse skip-high-rse)
           (flet ((time-it (commands)
                    (funcall (if (string= estimator "delta")
                                 #'time/delta
@@ -643,8 +640,6 @@
                             commands
                             :command-names command-names
                             :warmup warmup :runs runs
-                            :max-runs max-runs :max-rse max-rse
-                            :shuffle shuffle
                             :measure-gc nil :geometricp geometricp
                             :time-unit time-unit)))
             (when commands
@@ -656,9 +651,9 @@
                                        (parse-benchmark-file s)))
                                  #'time-it
                                  :command-names command-names
-                                 :shuffle shuffle-benchmarks
                                  :max-rse max-rse
                                  :skip-high-rse skip-high-rse
+                                 :shuffle shuffle-benchmarks
                                  :measure-gc nil :geometricp geometricp
                                  :time-unit time-unit)))
           (format t "~%Done.~%")))

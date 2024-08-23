@@ -134,13 +134,6 @@
         (funcall ,timer (%make-timing ,args)))
       ,fn)))
 
-(defun timing-filter-gc (timing measure-gc)
-  (if measure-gc
-      timing
-      (let ((timing (copy-list timing)))
-        (remf timing :gc-run-time-ms)
-        timing)))
-
 (defun timing-value (timing key)
   (let ((x (if (functionp key)
                (funcall key timing)
@@ -149,6 +142,28 @@
             (car x)
             x)
         0)))
+
+(defun frob-timing (timing measure-gc log-domain-p)
+  (let ((timing (if measure-gc
+                    timing
+                    (let ((timing (copy-list timing)))
+                      (remf timing :gc-run-time-ms)
+                      timing))))
+    (if log-domain-p
+        (log-timing timing)
+        timing)))
+
+(defun log-timing (timing)
+  (loop for (key value) on timing by #'cddr
+        append (list key (cond ((not (numberp value)) value)
+                               ((zerop value) most-negative-double-float)
+                               (t (log value))))))
+
+(defun exp-timing (timing)
+  (loop for (key value) on timing by #'cddr
+        append (list key (if (numberp value)
+                             (exp value)
+                             value))))
 
 ;;; This is the variance of the measurement (0 by default). Currently
 ;;; only used when multiple timings averaged and their sample variance
@@ -219,6 +234,16 @@
 
 (defvar *time-unit* 1)
 
+(defvar *print-timing-gc* nil)
+
+(defun print-heading (serial-no)
+  (if serial-no
+      (format t "#~3D" serial-no)
+      (format t "   "))
+  (format t " cmd    real  +-rse%  stddev     cpu  +-rse%  stddev ~
+             (   user +     sys~:[~;,      gc~])~%"
+          *print-timing-gc*))
+
 (defun print-timing (timing &key (time-unit *time-unit*))
   (let ((n-measurements (timing-n-measurements timing)))
     (flet ((value (key)
@@ -247,7 +272,9 @@
       (format t " (~7,3F + ~7,3F~@[, ~7,3F~])~%"
               (/ (value :user-run-time-us) 1000000 time-unit)
               (/ (value :system-run-time-us) 1000000 time-unit)
-              (and (getf timing :gc-run-time-ms)
+              (and *print-timing-gc*
+                   ;; FIXME: :GC-REAL-TIME-MS?
+                   (getf timing :gc-run-time-ms)
                    (/ (value :gc-run-time-ms) 1000 time-unit))))))
 
 
@@ -303,21 +330,14 @@
     (/ (max-rsd means variances)
        (sqrt (length (aref timings-vector 0))))))
 
-(defun print-heading (serial-no measure-gc)
-  (if serial-no
-      (format t "#~3D" serial-no)
-      (format t "   "))
-  (format t " cmd    real  +-rse%  stddev     cpu  +-rse%  stddev ~
-             (   user +     sys~:[~;,      gc~])~%"
-          measure-gc))
-
 (defun time/beta (commands &key command-names (warmup 0) (runs 10)
                              max-runs max-rse shuffle
-                             measure-gc (time-unit *time-unit*))
+                             measure-gc logp (time-unit *time-unit*))
   (let* ((fns (commands-to-functions commands command-names))
          (n-commands (length fns))
          (timings (make-array n-commands :initial-element ()))
-         (*time-unit* time-unit))
+         (*time-unit* time-unit)
+         (*print-timing-gc* measure-gc))
     (flet ((command-indices ()
              (let ((indices (alexandria:iota n-commands)))
                (if shuffle
@@ -341,27 +361,23 @@
         (format t "~%Warming up~%")
         (loop for run below warmup do
           (terpri)
-          (print-heading (1+ run) measure-gc)
+          (print-heading (1+ run))
           (loop for i in (command-indices)
                 do (print-command-name i :maybe-shuffled)
-                   (with-timing
-                       (lambda (timing)
-                         (print-timing (timing-filter-gc timing measure-gc)))
+                   (with-timing #'print-timing
                      (elt fns i)))))
       (format t "~%Benchmarking~%")
       (loop for run upfrom 0
             while (no-more-runs-p run timings)
             do (terpri)
-               (print-heading (1+ run) measure-gc)
+               (print-heading (1+ run))
                (loop for i in (command-indices)
                      do (let ((fn (elt fns i)))
                           (print-command-name i :maybe-shuffled)
                           (with-timing
                               (lambda (timing)
-                                (let ((timing (timing-filter-gc timing
-                                                                measure-gc)))
-                                  (print-timing timing)
-                                  (push timing (aref timings i))))
+                                (print-timing timing)
+                                (push timing (aref timings i)))
                             fn)))
                (when shuffle
                  (loop for i below n-commands
@@ -380,11 +396,12 @@
 ;;;; Delta estimator
 
 (defun time/delta (commands &key command-names (warmup 0) (runs 10)
-                              measure-gc (time-unit *time-unit*))
+                              measure-gc logp (time-unit *time-unit*))
   (let* ((fns (commands-to-functions commands command-names))
          (n-commands (length fns))
          (timings (make-array n-commands :initial-element ()))
-         (*time-unit* time-unit))
+         (*time-unit* time-unit)
+         (*print-timing-gc* measure-gc))
     (flet ((command-indices ()
              (alexandria:shuffle (alexandria:iota n-commands)))
            (print-command-name (command-index kind &optional n)
@@ -405,18 +422,16 @@
         (format t "~%Warming up~%")
         (loop for run below warmup do
           (terpri)
-          (print-heading run measure-gc)
+          (print-heading run)
           (loop for i in (command-indices)
                 do (print-command-name i :shuffled)
-                   (with-timing
-                       (lambda (timing)
-                         (print-timing (timing-filter-gc timing measure-gc)))
+                   (with-timing #'print-timing
                      (elt fns i)))))
       (format t "~%Benchmarking~%")
       (loop with run = 0
             until (no-more-runs-p timings)
             do (terpri)
-               (print-heading run measure-gc)
+               (print-heading run)
                ;; Run commands until the minimum number of runs
                ;; changes.
                (let ((min-n-runs (min-n-runs timings)))
@@ -426,10 +441,8 @@
                         (print-command-name i :random)
                         (with-timing
                             (lambda (timing)
-                              (let ((timing (timing-filter-gc timing
-                                                              measure-gc)))
-                                (print-timing timing)
-                                (push timing (aref timings i))))
+                              (print-timing timing)
+                              (push timing (aref timings i)))
                           fn))
                       (incf run)
                    while (= min-n-runs (min-n-runs timings))))
@@ -484,7 +497,8 @@
          ;; Contains even skipped benchmarks.
          (command-timings/skip (when skipp
                                  (make-array n-commands :initial-element ())))
-         (n-skipped 0))
+         (n-skipped 0)
+         (*print-timing-gc* measure-gc))
     (flet ((print-command-totals (command-timings)
              (loop for i below n-commands
                    do (format t "tot. ~A " (command-name command-names i))
@@ -515,13 +529,13 @@
              (when (plusp n-skipped)
                (format t " (excluding ~S skipped)"  n-skipped))
              (terpri)
-             (print-heading nil measure-gc)
+             (print-heading nil)
              (print-command-totals command-timings)
              ;; Print totals with skipped if any
              (when (plusp n-skipped)
                (format t "~%Totals after benchmark ~S (including ~S skipped)~%"
                        (1+ benchmark-index) n-skipped)
-               (print-heading nil measure-gc)
+               (print-heading nil)
                (print-command-totals command-timings/skip)))))))
 
 #+nil

@@ -398,10 +398,6 @@
                                   ((:random) "rand"))
                      (command-name command-names command-index))
              (force-output))
-           (no-more-runs-p (timings)
-             (every (lambda (timings)
-                      (<= runs (length timings)))
-                    timings))
            (min-n-runs (timings)
              (loop for timings across timings
                    minimizing (length timings))))
@@ -415,34 +411,33 @@
                    (with-timing #'print-timing
                      (elt fns i)))))
       (format t "~%Benchmarking~%")
-      (loop with run = 0
-            until (no-more-runs-p timings)
-            do (terpri)
-               (print-heading run "D")
-               ;; Run commands until the minimum number of runs
-               ;; changes.
-               (let ((min-n-runs (min-n-runs timings)))
-                 (loop
-                   do (let* ((i (random n-commands))
-                             (fn (elt fns i)))
-                        (print-command-name i :random)
-                        (with-timing
-                            (lambda (timing)
-                              (print-timing timing)
-                              (push timing (aref timings i)))
-                          fn))
-                      (incf run)
-                   while (= min-n-runs (min-n-runs timings))))
-               (loop for i below n-commands
-                     do (let ((timings (aref timings i)))
-                          (print-command-name i :mean (length timings))
-                          (print-timing (estimate-mean timings geometricp))))
-               (setq geometricp (not geometricp))
-               (loop for i below n-commands
-                     do (let ((timings (aref timings i)))
-                          (print-command-name i :mean (length timings))
-                          (print-timing (estimate-mean timings geometricp))))
-               (setq geometricp (not geometricp))))
+      (loop
+        (terpri)
+        (let ((min-n-runs (min-n-runs timings)))
+          (when (<= runs min-n-runs)
+            (return))
+          (print-heading min-n-runs "D")
+          ;; Run commands until the minimum number of runs changes.
+          (loop
+            do (let* ((i (random n-commands))
+                      (fn (elt fns i)))
+                 (print-command-name i :random)
+                 (with-timing
+                     (lambda (timing)
+                       (print-timing timing)
+                       (push timing (aref timings i)))
+                   fn))
+            while (= min-n-runs (min-n-runs timings))))
+        (loop for i below n-commands
+              do (let ((timings (aref timings i)))
+                   (print-command-name i :mean (length timings))
+                   (print-timing (estimate-mean timings geometricp))))
+        (setq geometricp (not geometricp))
+        (loop for i below n-commands
+              do (let ((timings (aref timings i)))
+                   (print-command-name i :mean (length timings))
+                   (print-timing (estimate-mean timings geometricp))))
+        (setq geometricp (not geometricp))))
     (map 'list (lambda (timings)
                  (estimate-mean timings geometricp))
          timings)))

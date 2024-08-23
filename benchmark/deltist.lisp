@@ -327,7 +327,7 @@
        (sqrt (length (aref timings-vector 0))))))
 
 (defun time/beta (commands &key command-names (warmup 0) (runs 10)
-                             max-runs max-rse shuffle
+                             max-runs max-rse
                              measure-gc (geometricp t) (time-unit *time-unit*))
   (let* ((fns (commands-to-functions commands command-names))
          (n-commands (length fns))
@@ -335,14 +335,10 @@
          (*time-unit* time-unit)
          (*print-timing-gc* measure-gc))
     (flet ((command-indices ()
-             (let ((indices (alexandria:iota n-commands)))
-               (if shuffle
-                   (alexandria:shuffle indices)
-                   indices)))
+             (alexandria:shuffle (alexandria:iota n-commands)))
            (print-command-name (command-index kind)
              (format t "~A ~A " (ecase kind
-                                  ((:maybe-shuffled)
-                                   (if shuffle "shuf" "    "))
+                                  ((:shuffled) "shuf")
                                   ((:ordered) "    ")
                                   ((:mean) (if geometricp "geom" "arit")))
                      (command-name command-names command-index))
@@ -359,7 +355,7 @@
           (terpri)
           (print-heading (1+ run))
           (loop for i in (command-indices)
-                do (print-command-name i :maybe-shuffled)
+                do (print-command-name i :shuffled)
                    (with-timing #'print-timing
                      (elt fns i)))))
       (format t "~%Benchmarking~%")
@@ -369,16 +365,15 @@
                (print-heading (1+ run))
                (loop for i in (command-indices)
                      do (let ((fn (elt fns i)))
-                          (print-command-name i :maybe-shuffled)
+                          (print-command-name i :shuffled)
                           (with-timing
                               (lambda (timing)
                                 (print-timing timing)
                                 (push timing (aref timings i)))
                             fn)))
-               (when shuffle
-                 (loop for i below n-commands
-                       do (print-command-name i :ordered)
-                          (print-timing (first (aref timings i)))))
+               (loop for i below n-commands
+                     do (print-command-name i :ordered)
+                        (print-timing (first (aref timings i))))
                (loop for i below n-commands
                      do (print-command-name i :mean)
                         (print-timing (estimate-mean (aref timings i)

@@ -157,20 +157,17 @@
 (defun timing-n-measurements (timing)
   (getf timing :n-measurements 1))
 
+;;; 0s is measured sometimes ...
+(defvar *log-kludge* 0.001d0)
+
 (defun maybe-log (x logp)
   (cond ((not logp) x)
-        ((zerop x)
-         ;; A value whose EXP is zero, but not too negative so that
-         ;; many of it can be summed without overflow.
-         #.(1- (log least-positive-double-float)))
         ((minusp x)
          (assert nil))
-        (t (log x))))
+        (t (log (+ x *log-kludge*)))))
 
 (defun maybe-exp (x logp)
-  (if logp
-      (exp x)
-      x))
+  (if logp (exp x) x))
 
 (defun timings-mean (timings key geometricp)
   (let ((sum 0))
@@ -179,8 +176,8 @@
          timings)
     (maybe-exp (/ sum (length timings)) geometricp)))
 
-(defun timings-variance (timings key geometricp)
-  (let ((mean (timings-mean timings key geometricp))
+(defun timings-variance (timings key)
+  (let ((mean (timings-mean timings key nil))
         (sum 0)
         (sum-variances 0))
     (map nil (lambda (timing)
@@ -207,12 +204,12 @@
            (loop for key in keys
                  unless (eq key :n-measurements)
                    append (list key (cons (timings-mean timings key geometricp)
-                                          (/ (timings-variance timings key
-                                                               geometricp)
+                                          (/ (timings-variance timings key)
                                              n-measurements)))))))
 
-;;; Sum the independent random variables TIMINGS (both their means and
-;;; variances are summed). They need not be identically distributed.
+;;; Sum TIMINGS (both their values and variances are summed). The
+;;; values are summed in the log domain if GEOMETRICP (i.e.
+;;; expsumlog).
 (defun sum-timings (timings geometricp)
   (flet ((sum-values (key)
            (maybe-exp (loop for timing in timings
@@ -220,10 +217,8 @@
                                            geometricp))
                       geometricp))
          (sum-uncertainties (key)
-           (maybe-exp (loop for timing in timings
-                            sum (maybe-log (timing-uncertainty timing key)
-                                           geometricp))
-                      geometricp)))
+           (loop for timing in timings
+                 sum (timing-uncertainty timing key))))
     (let ((keys (loop for rest on (first timings) by #'cddr
                       collect (first rest))))
       (list* :n-measurements 1
@@ -326,7 +321,7 @@
                     timings-vector))
         (variances (map 'vector
                         (lambda (timings)
-                          (timings-variance timings :real-time-ms nil))
+                          (timings-variance timings :real-time-ms))
                         timings-vector)))
     (/ (max-rsd means variances)
        (sqrt (length (aref timings-vector 0))))))
@@ -455,7 +450,13 @@
                (loop for i below n-commands
                      do (let ((timings (aref timings i)))
                           (print-command-name i :mean (length timings))
-                          (print-timing (estimate-mean timings geometricp))))))
+                          (print-timing (estimate-mean timings geometricp))))
+               (setq geometricp (not geometricp))
+               (loop for i below n-commands
+                     do (let ((timings (aref timings i)))
+                          (print-command-name i :mean (length timings))
+                          (print-timing (estimate-mean timings geometricp))))
+               (setq geometricp (not geometricp))))
     (map 'list (lambda (timings)
                  (estimate-mean timings geometricp))
          timings)))
@@ -463,7 +464,7 @@
 #+nil
 (time/delta (list (lambda () (sleep (+ 0.075 (random 0.05))))
                   (lambda () (sleep (+ 0.175 (random 0.05)))))
-            :geometricp t)
+            :runs 100 :geometricp t)
 
 
 ;;;; Benchmarks
@@ -663,15 +664,20 @@
 ;;;; Needs geometric averaging
 
 (defun burn-cpu ()
-  (loop for i below 9999999999))
+  (loop for i below 999999999))
 
 #+nil
 (loop (burn-cpu))
 #+nil
 (time/delta (list (lambda () (burn-cpu))
                   (lambda () (burn-cpu)))
-            :runs 20)
+            :runs 100)
+
+#+nil
+(time/beta (list (lambda () (burn-cpu))
+                 (lambda () (burn-cpu)))
+           :runs 100)
 
 #+nil
 (loop repeat 2 do
-  (time/delta (list (lambda () (burn-cpu))) :runs 20))
+  (time/delta (list (lambda () (burn-cpu))) :runs 100))

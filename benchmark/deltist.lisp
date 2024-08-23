@@ -143,28 +143,6 @@
             x)
         0)))
 
-(defun frob-timing (timing measure-gc log-domain-p)
-  (let ((timing (if measure-gc
-                    timing
-                    (let ((timing (copy-list timing)))
-                      (remf timing :gc-run-time-ms)
-                      timing))))
-    (if log-domain-p
-        (log-timing timing)
-        timing)))
-
-(defun log-timing (timing)
-  (loop for (key value) on timing by #'cddr
-        append (list key (cond ((not (numberp value)) value)
-                               ((zerop value) most-negative-double-float)
-                               (t (log value))))))
-
-(defun exp-timing (timing)
-  (loop for (key value) on timing by #'cddr
-        append (list key (if (numberp value)
-                             (exp value)
-                             value))))
-
 ;;; This is the variance of the measurement (0 by default). Currently
 ;;; only used when multiple timings averaged and their sample variance
 ;;; is estimated (see ESTIMATE-MEAN).
@@ -179,15 +157,30 @@
 (defun timing-n-measurements (timing)
   (getf timing :n-measurements 1))
 
-(defun timings-mean (timings key)
+(defun maybe-log (x logp)
+  (cond ((not logp) x)
+        ((zerop x)
+         ;; A value whose EXP is zero, but not too negative so that
+         ;; many of it can be summed without overflow.
+         #.(1- (log least-positive-double-float)))
+        ((minusp x)
+         (assert nil))
+        (t (log x))))
+
+(defun maybe-exp (x logp)
+  (if logp
+      (exp x)
+      x))
+
+(defun timings-mean (timings key geometricp)
   (let ((sum 0))
     (map nil (lambda (timing)
-               (incf sum (timing-value timing key)))
+               (incf sum (maybe-log (timing-value timing key) geometricp)))
          timings)
-    (/ sum (length timings))))
+    (maybe-exp (/ sum (length timings)) geometricp)))
 
-(defun timings-variance (timings key)
-  (let ((mean (timings-mean timings key))
+(defun timings-variance (timings key geometricp)
+  (let ((mean (timings-mean timings key geometricp))
         (sum 0)
         (sum-variances 0))
     (map nil (lambda (timing)
@@ -205,7 +198,7 @@
 ;;; Return a timing whose TIMING-VALUEs are the estimated means of
 ;;; TIMINGS, and whose TIMING-UNCERTAINTYs are the estimated variance
 ;;; of the mean estimate. TIMINGS must be i.i.d. measurements (FIXME).
-(defun estimate-mean (timings)
+(defun estimate-mean (timings geometricp)
   (let ((keys (loop for rest on (first timings) by #'cddr
                     collect (first rest)))
         (n-measurements (loop for timing in timings
@@ -213,24 +206,31 @@
     (list* :n-measurements n-measurements
            (loop for key in keys
                  unless (eq key :n-measurements)
-                 append (list key (cons (timings-mean timings key)
-                                        (/ (timings-variance timings key)
-                                           n-measurements)))))))
+                   append (list key (cons (timings-mean timings key geometricp)
+                                          (/ (timings-variance timings key
+                                                               geometricp)
+                                             n-measurements)))))))
 
 ;;; Sum the independent random variables TIMINGS (both their means and
 ;;; variances are summed). They need not be identically distributed.
-(defun sum-timings (timings)
-  (let ((keys (loop for rest on (first timings) by #'cddr
-                    collect (first rest))))
-    (list* :n-measurements 1
-           (loop for key in keys
-                 unless (eq key :n-measurements)
-                   append (list key
-                                (cons (loop for timing in timings
-                                            sum (timing-value timing key))
-                                      (loop for timing in timings
-                                            sum (timing-uncertainty timing
-                                                                    key))))))))
+(defun sum-timings (timings geometricp)
+  (flet ((sum-values (key)
+           (maybe-exp (loop for timing in timings
+                            sum (maybe-log (timing-value timing key)
+                                           geometricp))
+                      geometricp))
+         (sum-uncertainties (key)
+           (maybe-exp (loop for timing in timings
+                            sum (maybe-log (timing-uncertainty timing key)
+                                           geometricp))
+                      geometricp)))
+    (let ((keys (loop for rest on (first timings) by #'cddr
+                      collect (first rest))))
+      (list* :n-measurements 1
+             (loop for key in keys
+                   unless (eq key :n-measurements)
+                     append (list key (cons (sum-values key)
+                                            (sum-uncertainties key))))))))
 
 (defvar *time-unit* 1)
 
@@ -321,18 +321,19 @@
 (defun max-rse-of-timings (timings-vector)
   (let ((means (map 'vector
                     (lambda (timings)
-                      (timings-mean timings :real-time-ms))
+                      ;; FIXME: geometric?
+                      (timings-mean timings :real-time-ms nil))
                     timings-vector))
         (variances (map 'vector
                         (lambda (timings)
-                          (timings-variance timings :real-time-ms))
+                          (timings-variance timings :real-time-ms nil))
                         timings-vector)))
     (/ (max-rsd means variances)
        (sqrt (length (aref timings-vector 0))))))
 
 (defun time/beta (commands &key command-names (warmup 0) (runs 10)
                              max-runs max-rse shuffle
-                             measure-gc logp (time-unit *time-unit*))
+                             measure-gc (geometricp t) (time-unit *time-unit*))
   (let* ((fns (commands-to-functions commands command-names))
          (n-commands (length fns))
          (timings (make-array n-commands :initial-element ()))
@@ -348,7 +349,7 @@
                                   ((:maybe-shuffled)
                                    (if shuffle "shuf" "    "))
                                   ((:ordered) "    ")
-                                  ((:mean) "mean"))
+                                  ((:mean) (if geometricp "geom" "arit")))
                      (command-name command-names command-index))
              (force-output))
            (no-more-runs-p (run timings)
@@ -385,8 +386,11 @@
                           (print-timing (first (aref timings i)))))
                (loop for i below n-commands
                      do (print-command-name i :mean)
-                        (print-timing (estimate-mean (aref timings i))))))
-    (map 'list #'estimate-mean timings)))
+                        (print-timing (estimate-mean (aref timings i)
+                                                     geometricp)))))
+    (map 'list (lambda (timings)
+                 (estimate-mean timings geometricp))
+         timings)))
 
 #+nil
 (time/beta (list (lambda () (sleep (+ 0.075 (random 0.05))))
@@ -396,7 +400,7 @@
 ;;;; Delta estimator
 
 (defun time/delta (commands &key command-names (warmup 0) (runs 10)
-                              measure-gc logp (time-unit *time-unit*))
+                              measure-gc (geometricp t) (time-unit *time-unit*))
   (let* ((fns (commands-to-functions commands command-names))
          (n-commands (length fns))
          (timings (make-array n-commands :initial-element ()))
@@ -407,7 +411,9 @@
            (print-command-name (command-index kind &optional n)
              (format t "~A ~A " (ecase kind
                                   ((:shuffled) "shuf")
-                                  ((:mean) (format nil "#~3D" n))
+                                  ((:mean) (format nil "~A~3D"
+                                                   (if geometricp "G" "A")
+                                                   n))
                                   ((:random) "rand"))
                      (command-name command-names command-index))
              (force-output))
@@ -449,12 +455,15 @@
                (loop for i below n-commands
                      do (let ((timings (aref timings i)))
                           (print-command-name i :mean (length timings))
-                          (print-timing (estimate-mean timings))))))
-    (map 'list #'estimate-mean timings)))
+                          (print-timing (estimate-mean timings geometricp))))))
+    (map 'list (lambda (timings)
+                 (estimate-mean timings geometricp))
+         timings)))
 
 #+nil
 (time/delta (list (lambda () (sleep (+ 0.075 (random 0.05))))
-                  (lambda () (sleep (+ 0.175 (random 0.05))))))
+                  (lambda () (sleep (+ 0.175 (random 0.05)))))
+            :geometricp t)
 
 
 ;;;; Benchmarks
@@ -489,7 +498,7 @@
 
 (defun time-sequentially (benchmarks time-it
                           &key command-names shuffle max-rse skip-high-rse
-                            (measure-gc t) (time-unit *time-unit*))
+                            (measure-gc t) geometricp (time-unit *time-unit*))
   (let* ((benchmarks (if shuffle (alexandria:shuffle benchmarks) benchmarks))
          (n-commands (length (benchmark-commands (first benchmarks))))
          (command-timings (make-array n-commands :initial-element ()))
@@ -502,7 +511,8 @@
     (flet ((print-command-totals (command-timings)
              (loop for i below n-commands
                    do (format t "tot. ~A " (command-name command-names i))
-                      (print-timing (sum-timings (aref command-timings i))
+                      (print-timing (sum-timings (aref command-timings i)
+                                                 geometricp)
                                     :time-unit time-unit))))
       (loop for benchmark in benchmarks
             do (assert (= (length (benchmark-commands benchmark)) n-commands)))
@@ -597,6 +607,7 @@
               (max-runs (get-option-integer-value options "--max-runs" 40))
               (max-rse (get-option-real-value options "--max-rse" 0.001))
               (shuffle (get-option-boolean-value options "--shuffle" nil))
+              (geometricp (get-option-boolean-value options "--geometric" t))
               (time-unit (get-option-real-value options "--time-unit" 1))
               (command-names
                 (split-sequence:split-sequence
@@ -613,16 +624,18 @@
           (format t "~%warmup: ~S, runs: ~S, max-runs: ~S, max-rse: ~,1F%, ~
                      shuffle: ~S, time-unit: ~Fs,~%~
                      command-names: ~A, benchmark-file: ~S, ~
-                     shuffle-benchmarks: ~S, skip-high-rse: ~S~%"
+                     shuffle-benchmarks: ~S, skip-high-rse: ~S, geometric: ~S~%"
                   warmup runs max-runs (* 100 max-rse) shuffle time-unit
-                  command-names benchmark-file shuffle-benchmarks skip-high-rse)
+                  command-names benchmark-file shuffle-benchmarks skip-high-rse
+                  geometricp)
           (flet ((time-it (commands)
                    (time/beta commands
                               :command-names command-names
                               :warmup warmup :runs runs
                               :max-runs max-runs :max-rse max-rse
                               :shuffle shuffle
-                              :measure-gc nil :time-unit time-unit)))
+                              :measure-gc nil :geometricp geometricp
+                              :time-unit time-unit)))
             (when commands
               (time-it commands))
             (when benchmark-file
@@ -635,7 +648,8 @@
                                  :shuffle shuffle-benchmarks
                                  :max-rse max-rse
                                  :skip-high-rse skip-high-rse
-                                 :measure-gc nil)))
+                                 :measure-gc nil :geometricp geometricp
+                                 :time-unit time-unit)))
           (format t "~%Done.~%")))
     ((or sb-sys:interactive-interrupt sb-int:broken-pipe) ()
       ;; 130=128+SIGINT

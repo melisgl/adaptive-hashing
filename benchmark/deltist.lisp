@@ -231,9 +231,9 @@
 
 (defvar *print-timing-gc* nil)
 
-(defun print-heading (serial-no)
+(defun print-heading (serial-no &optional marker)
   (if serial-no
-      (format t "#~3D" serial-no)
+      (format t "~A~3D" marker serial-no)
       (format t "   "))
   (format t " cmd    real  +-rse%  stddev     cpu  +-rse%  stddev ~
              (   user +     sys~:[~;,      gc~])~%"
@@ -346,7 +346,7 @@
         (format t "~%Warming up~%")
         (loop for run below warmup do
           (terpri)
-          (print-heading (* run n-commands))
+          (print-heading (1+ run) "B")
           (loop for i in (command-indices)
                 do (print-command-name i :shuffled)
                    (with-timing #'print-timing
@@ -354,7 +354,7 @@
       (format t "~%Benchmarking~%")
       (loop for run below runs
             do (terpri)
-               (print-heading (* run n-commands))
+               (print-heading (1+ run) "B")
                (loop for i in (command-indices)
                      do (let ((fn (elt fns i)))
                           (print-command-name i :shuffled)
@@ -410,7 +410,7 @@
         (format t "~%Warming up~%")
         (loop for run below warmup do
           (terpri)
-          (print-heading run)
+          (print-heading run "B")
           (loop for i in (command-indices)
                 do (print-command-name i :shuffled)
                    (with-timing #'print-timing
@@ -419,7 +419,7 @@
       (loop with run = 0
             until (no-more-runs-p timings)
             do (terpri)
-               (print-heading run)
+               (print-heading run "D")
                ;; Run commands until the minimum number of runs
                ;; changes.
                (let ((min-n-runs (min-n-runs timings)))

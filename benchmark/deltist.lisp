@@ -498,7 +498,8 @@
          (*print-timing-gc* measure-gc))
     (flet ((print-command-totals (command-timings)
              (loop for i below n-commands
-                   do (format t "tot. ~A " (command-name command-names i))
+                   do (format t "~A ~A " (if geometricp "geom" "arit")
+                              (command-name command-names i))
                       (print-timing (sum-timings (aref command-timings i)
                                                  geometricp)
                                     :time-unit time-unit))))

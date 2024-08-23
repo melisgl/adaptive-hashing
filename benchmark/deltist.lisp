@@ -78,6 +78,12 @@
   (require :split-sequence))
 
 
+;;;; Utilities
+
+(defun random-permutation (n)
+  (alexandria:shuffle (alexandria:iota n)))
+
+
 ;;;; KLUDGE: Redefine SB-SYS::GET-SYSTEM-INFO (used by
 ;;;; SB-EXT:CALL-WITH-TIMING below) with SB-UNIX:RUSAGE_CHILDREN
 ;;;; instead of SB-UNIX:RUSAGE_SELF.
@@ -332,9 +338,7 @@
          (timings (make-array n-commands :initial-element ()))
          (*time-unit* time-unit)
          (*print-timing-gc* measure-gc))
-    (flet ((command-indices ()
-             (alexandria:shuffle (alexandria:iota n-commands)))
-           (print-command-name (command-index kind)
+    (flet ((print-command-name (command-index kind)
              (format t "~A ~A " (ecase kind
                                   ((:shuffled) "shuf")
                                   ((:ordered) "    ")
@@ -346,7 +350,7 @@
         (loop for run below warmup do
           (terpri)
           (print-heading (1+ run) "B")
-          (loop for i in (command-indices)
+          (loop for i in (random-permutation n-commands)
                 do (print-command-name i :shuffled)
                    (with-timing #'print-timing
                      (elt fns i)))))
@@ -354,7 +358,7 @@
       (loop for run below runs
             do (terpri)
                (print-heading (1+ run) "B")
-               (loop for i in (command-indices)
+               (loop for i in (random-permutation n-commands)
                      do (let ((fn (elt fns i)))
                           (print-command-name i :shuffled)
                           (with-timing
@@ -387,9 +391,7 @@
          (timings (make-array n-commands :initial-element ()))
          (*time-unit* time-unit)
          (*print-timing-gc* measure-gc))
-    (flet ((command-indices ()
-             (alexandria:shuffle (alexandria:iota n-commands)))
-           (print-command-name (command-index kind &optional n)
+    (flet ((print-command-name (command-index kind &optional n)
              (format t "~A ~A " (ecase kind
                                   ((:shuffled) "shuf")
                                   ((:mean) (format nil "~A~3D"
@@ -406,7 +408,7 @@
         (loop for run below warmup do
           (terpri)
           (print-heading (1+ run) "B")
-          (loop for i in (command-indices)
+          (loop for i in (random-permutation n-commands)
                 do (print-command-name i :shuffled)
                    (with-timing #'print-timing
                      (elt fns i)))))

@@ -477,15 +477,17 @@
       (dotimes (i n-commands)
         (dotimes (j n-commands)
           (setf (aref diffs i j)
-                (maybe-exp
-                 (- (maybe-log (timings-mean (aref ta i j) key geometricp)
-                               geometricp)
-                    (maybe-log (timings-mean (aref tac i j) key geometricp)
-                               geometricp))
-                 geometricp))))
+                (if geometricp
+                    (- (log (timings-mean (aref ta i j) key t))
+                       (log (timings-mean (aref tac i j) key t)))
+                    (- (timings-mean (aref ta i j) key nil)
+                       (timings-mean (aref tac i j) key nil))))))
       (dotimes (i n-commands)
         (dotimes (j n-commands)
-          (format t " ~5,2F" (/ (aref diffs i j) 1000 *time-unit*)))
+          (format t " ~5,3F"
+                  (if geometricp
+                      (aref diffs i j)
+                      (/ (aref diffs i j) 1000 *time-unit*))))
         (terpri)))))
 
 #+nil
@@ -731,7 +733,8 @@
                   ;; (lambda () (burn-cpu-2))
                   ;; (lambda () (burn-cpu))
                   )
-            :runs 100 :time-unit 0.01)
+            :geometricp t
+            :runs 1000 :time-unit 0.01)
 
 #+nil
 (time/beta (list (lambda () (burn-cpu-2))

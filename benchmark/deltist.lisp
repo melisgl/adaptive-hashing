@@ -337,6 +337,8 @@
   (let* ((fns (commands-to-functions commands command-names))
          (n-commands (length fns))
          (timings (make-array n-commands :initial-element ()))
+         (timings-after (make-array (list n-commands n-commands)
+                                    :initial-element ()))
          (*time-unit* time-unit)
          (*print-timing-gc* measure-gc))
     (flet ((print-command-name (command-index kind)
@@ -356,24 +358,30 @@
                    (with-timing #'print-timing
                      (elt fns i)))))
       (format t "~%Benchmarking~%")
-      (loop for run below runs
-            do (terpri)
-               (print-heading (1+ run) "B")
-               (loop for i in (random-permutation n-commands)
-                     do (let ((fn (elt fns i)))
-                          (print-command-name i :shuffled)
-                          (with-timing
-                              (lambda (timing)
-                                (print-timing timing)
-                                (push timing (aref timings i)))
-                            fn)))
-               (loop for i below n-commands
-                     do (print-command-name i :ordered)
-                        (print-timing (first (aref timings i))))
-               (loop for i below n-commands
-                     do (print-command-name i :mean)
-                        (print-timing (estimate-mean (aref timings i)
-                                                     geometricp)))))
+      (let ((prev nil))
+        (loop for run below runs
+              do (terpri)
+                 (print-heading (1+ run) "B")
+                 (loop for i in (random-permutation n-commands)
+                       do (let ((fn (elt fns i)))
+                            (print-command-name i :shuffled)
+                            (with-timing
+                                (lambda (timing)
+                                  (print-timing timing)
+                                  (push timing (aref timings i))
+                                  (when prev
+                                    (push timing (aref timings-after prev i)))
+                                  (setq prev i))
+                              fn)))
+                 (loop for i below n-commands
+                       do (print-command-name i :ordered)
+                          (print-timing (first (aref timings i))))
+                 (loop for i below n-commands
+                       do (print-command-name i :mean)
+                          (print-timing (estimate-mean (aref timings i)
+                                                       geometricp)))
+                 (check-assumption timings timings-after :real-time-ms
+                                   geometricp))))
     (map 'list (lambda (timings)
                  (estimate-mean timings geometricp))
          timings)))

@@ -1,7 +1,7 @@
 ;;;; TODO
 ;;;;
 ;;;; - Even with interleaving, there is some unexplained variance
-;;;;  left.
+;;;;   left.
 ;;;;
 ;;;; - Outliers? Real/CPU anomalies? It's impossible to detect
 ;;;;   outliers without modelling the source.
@@ -45,8 +45,6 @@
 ;;;;
 ;;;; - Multiple measurements in one FUNCALL / RUN-PROGRAM? (To reduce
 ;;;;   the RUN-PROGRAM overhead) (network protocol?)
-;;;;
-;;;; - option for geometric averaging
 ;;;;
 ;;;; ----- Output -----
 ;;;;
@@ -660,20 +658,45 @@
 ;;;;
 ;;;; Needs geometric averaging
 
-(defun burn-cpu ()
-  (loop for i below 999999999))
+#+nil
+(defun burn-cpu (&key (n 1))
+  (declare (type (integer 0 10) n))
+  (loop for i below (* n 99999999)))
+
+(defun burn-cpu (&key (n-threads 1) (n 1))
+  (declare (type (integer 0 10) n))
+  (mapc #'sb-thread:join-thread
+        (loop repeat n-threads
+              collect (sb-thread:make-thread
+                       (lambda ()
+                         (loop for i below (* n 59999999)))))))
+
+(defun burn-cpu-2 (&key (n 1))
+  (declare (type (integer 0 10) n))
+  (loop for i below (* n 5999999)
+        count (zerop (mod i 100))))
 
 #+nil
 (loop (burn-cpu))
 #+nil
-(time/delta (list (lambda () (burn-cpu))
-                  (lambda () (burn-cpu)))
-            :runs 100)
+(time/delta (list (lambda () (burn-cpu-2))
+                  (lambda () (burn-cpu))
+                  ;; (lambda () (burn-cpu-2))
+                  ;; (lambda () (burn-cpu))
+                  ;; (lambda () (burn-cpu-2))
+                  ;; (lambda () (burn-cpu))
+                  )
+            :runs 100 :time-unit 0.01)
 
 #+nil
-(time/beta (list (lambda () (burn-cpu))
-                 (lambda () (burn-cpu)))
-           :runs 100)
+(time/beta (list (lambda () (burn-cpu-2))
+                 (lambda () (burn-cpu))
+                 ;; (lambda () (burn-cpu-2))
+                 ;; (lambda () (burn-cpu))
+                 ;; (lambda () (burn-cpu-2))
+                 ;; (lambda () (burn-cpu))
+                 )
+           :runs 100 :time-unit 0.01)
 
 #+nil
 (loop repeat 2 do

@@ -453,12 +453,6 @@
                 do (let ((timings (aref timings i)))
                      (print-command-name i :mean (length timings))
                      (print-timing (estimate-mean timings geometricp))))
-          (setq geometricp (not geometricp))
-          (loop for i below n-commands
-                do (let ((timings (aref timings i)))
-                     (print-command-name i :mean (length timings))
-                     (print-timing (estimate-mean timings geometricp))))
-          (setq geometricp (not geometricp))
           (check-assumption timings timings-after :real-time-ms geometricp))))
     (format t "Total runs: ~D~%" (loop for timings across timings
                                        sum (length timings)))
@@ -742,7 +736,7 @@
                   ;; (lambda () (burn-cpu))
                   )
             :geometricp t
-            :runs 1000 :time-unit 0.01)
+            :runs 400 :time-unit 0.01)
 
 #+nil
 (time/beta (list (lambda () (burn-cpu-2))
@@ -752,7 +746,8 @@
                  ;; (lambda () (burn-cpu-2))
                  ;; (lambda () (burn-cpu))
                  )
-           :runs 100 :time-unit 0.01)
+           :geometricp t
+           :runs 400 :time-unit 0.01)
 
 #+nil
 (loop repeat 2 do

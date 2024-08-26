@@ -168,7 +168,7 @@
   (getf timing :n-measurements 1))
 
 ;;; 0s is measured sometimes ...
-(defparameter *log-kludge* 1d-7)
+(defparameter *log-kludge* 1d-20)
 
 (defun maybe-log (x logp)
   (cond ((not logp) x)
@@ -729,11 +729,11 @@
 
 (defun burn-cpu (&key (n-threads 1) (n 1))
   (declare (type (integer 0 10) n))
-  (loop for i below (* n 59999999)))
+  (loop for i below (* n 999999)))
 
 (defun burn-cpu-2 (&key (n 1))
   (declare (type (integer 0 10) n))
-  (loop for i below (* n 5999999)
+  (loop for i below (* n 99999)
         count (zerop (mod i 100))))
 
 #+nil
@@ -745,14 +745,15 @@
 (time/delta (list #'burn-cpu-2
                   #'burn-cpu)
             :geometricp t
-            :runs 2000 :time-unit 0.01)
+            :runs 2000 :time-unit 0.0001)
 
 #+nil
 (time/beta (list #'burn-cpu-2
                  #'burn-cpu)
            :geometricp t
-           :runs 2000 :time-unit 0.01)
+           :runs 2000 :time-unit 0.0001)
 
+;;; FIXME: Arithmethic average of geometric averages ...
 #+nil
 (time/delta (list #'burn-cpu-2
                   #'burn-cpu
@@ -765,7 +766,7 @@
                   #'burn-cpu-2
                   #'burn-cpu)
             :geometricp t
-            :runs 400 :time-unit 0.01)
+            :runs 400 :time-unit 0.0001)
 #+nil
 (time/beta (list #'burn-cpu-2
                  #'burn-cpu
@@ -778,7 +779,7 @@
                  #'burn-cpu-2
                  #'burn-cpu)
            :geometricp t
-           :runs 400 :time-unit 0.01)
+           :runs 400 :time-unit 0.0001)
 
 #+nil
 (loop repeat 2 do

@@ -382,6 +382,7 @@
                                                        geometricp)))
                  (check-assumption timings timings-after :real-time-ms
                                    geometricp command-names))))
+    (format t "~%Total runs: ~S~%" (* runs n-commands))
     (map 'list (lambda (timings)
                  (estimate-mean timings geometricp))
          timings)))
@@ -728,24 +729,25 @@
 #+nil
 (loop (burn-cpu))
 #+nil
-(time/delta (list (lambda () (burn-cpu-2))
-                  (lambda () (burn-cpu))
-                  ;; (lambda () (burn-cpu-2))
-                  ;; (lambda () (burn-cpu))
-                  ;; (lambda () (burn-cpu-2))
-                  ;; (lambda () (burn-cpu))
-                  )
+(time/delta (list ;; #'burn-cpu-2
+                  ;; #'burn-cpu
+                  ;; #'burn-cpu-2
+                  ;; #'burn-cpu
+                  #'burn-cpu-2
+                  #'burn-cpu)
             :geometricp t
             :runs 400 :time-unit 0.01)
+#+nil
+(sb-thread:join-thread
+ (sb-thread:make-thread (lambda () (princ-to-string *random-state*))))
 
 #+nil
-(time/beta (list (lambda () (burn-cpu-2))
-                 (lambda () (burn-cpu))
-                 ;; (lambda () (burn-cpu-2))
-                 ;; (lambda () (burn-cpu))
-                 ;; (lambda () (burn-cpu-2))
-                 ;; (lambda () (burn-cpu))
-                 )
+(time/beta (list ;; #'burn-cpu-2
+                 ;; #'burn-cpu
+                 ;; #'burn-cpu-2
+                 ;; #'burn-cpu
+                 #'burn-cpu-2
+                 #'burn-cpu)
            :geometricp t
            :runs 400 :time-unit 0.01)
 

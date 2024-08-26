@@ -381,7 +381,7 @@
                           (print-timing (estimate-mean (aref timings i)
                                                        geometricp)))
                  (check-assumption timings timings-after :real-time-ms
-                                   geometricp))))
+                                   geometricp command-names))))
     (map 'list (lambda (timings)
                  (estimate-mean timings geometricp))
          timings)))
@@ -453,39 +453,41 @@
                 do (let ((timings (aref timings i)))
                      (print-command-name i :mean (length timings))
                      (print-timing (estimate-mean timings geometricp))))
-          (check-assumption timings timings-after :real-time-ms geometricp))))
+          (check-assumption timings timings-after :real-time-ms geometricp
+                            command-names))))
     (format t "Total runs: ~D~%" (loop for timings across timings
                                        sum (length timings)))
     (map 'list (lambda (timings)
                  (estimate-mean timings geometricp))
          timings)))
 
-(defun check-assumption (timings timings-after key geometricp)
+(defun check-assumption (timings timings-after key geometricp command-names)
   ;; Assuming order (AREF TIMINGS-AFTER I J), where I is the previous,
   ;; J is the current program (the index of).
   (let* ((ta timings-after)
-         (n-commands (array-dimension ta 0))
+         (n (array-dimension ta 0))
          ;; The "complement" of TA. Timings after I /= J.
-         (tac (make-array (list n-commands n-commands) :initial-element ())))
+         (tac (make-array (list n n) :initial-element ())))
     ;; Populate TAC
-    (dotimes (j n-commands)
+    (dotimes (j n)
       (let ((j-timings (aref timings j)))
-        (dotimes (i n-commands)
-          (let ((i-j-timings (aref timings-after i j)))
+        (dotimes (i n)
+          (let ((i-j-timings (aref ta i j)))
             (setf (aref tac i j) (set-difference j-timings i-j-timings))))))
-    ;; If the assumption holds, then for each i, E[L | i, j] - E[L |
+    ;; If our assumptions hold, then for each i, E[L | i, j] - E[L |
     ;; not i, j] = E[L | i, k] - E[L | not i, k] for all j and k.
-    (let ((diffs (make-array (list n-commands n-commands))))
-      (dotimes (i n-commands)
-        (dotimes (j n-commands)
+    (let ((diffs (make-array (list n n))))
+      (dotimes (i n)
+        (dotimes (j n)
           (setf (aref diffs i j)
                 (if geometricp
                     (- (log (timings-mean (aref ta i j) key t))
                        (log (timings-mean (aref tac i j) key t)))
                     (- (timings-mean (aref ta i j) key nil)
                        (timings-mean (aref tac i j) key nil))))))
-      (dotimes (i n-commands)
-        (dotimes (j n-commands)
+      (dotimes (i n)
+        (format t "prev=~A: " (command-name command-names i))
+        (dotimes (j n)
           (format t " ~5F"
                   (if geometricp
                       (aref diffs i j)

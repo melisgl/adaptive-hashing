@@ -166,11 +166,15 @@
   (if logp (exp x) x))
 
 (defun timings-mean (timings key geometricp)
-  (let ((sum 0))
+  (let ((sum 0)
+        (n (length timings)))
     (map nil (lambda (timing)
                (incf sum (maybe-log (timing-value timing key) geometricp)))
          timings)
-    (maybe-exp (/ sum (length timings)) geometricp)))
+    (maybe-exp (if (zerop n)
+                   0
+                   (/ sum n))
+               geometricp)))
 
 (defun timings-variance (timings key)
   (let ((mean (timings-mean timings key nil))
@@ -386,6 +390,12 @@
   (let* ((fns (commands-to-functions commands command-names))
          (n-commands (length fns))
          (timings (make-array n-commands :initial-element ()))
+         ;; Timings further grouped by the previous program. This is
+         ;; to detect some violations of the main assumption, that
+         ;; requires the uncontrolled state to have the same effect on
+         ;; all programs.
+         (timings-after (make-array (list n-commands n-commands)
+                                    :initial-element ()))
          (*time-unit* time-unit)
          (*print-timing-gc* measure-gc))
     (flet ((print-command-name (command-index kind &optional n)
@@ -410,38 +420,73 @@
                    (with-timing #'print-timing
                      (elt fns i)))))
       (format t "~%Benchmarking~%")
-      (loop
-        (terpri)
-        (let ((min-n-runs (min-n-runs timings)))
-          (when (<= runs min-n-runs)
-            (return))
-          (print-heading (1+ min-n-runs) "D")
-          ;; Run commands until the minimum number of runs changes.
-          (loop
-            do (let* ((i (random n-commands))
-                      (fn (elt fns i)))
-                 (print-command-name i :random)
-                 (with-timing
-                     (lambda (timing)
-                       (print-timing timing)
-                       (push timing (aref timings i)))
-                   fn))
-            while (= min-n-runs (min-n-runs timings))))
-        (loop for i below n-commands
-              do (let ((timings (aref timings i)))
-                   (print-command-name i :mean (length timings))
-                   (print-timing (estimate-mean timings geometricp))))
-        (setq geometricp (not geometricp))
-        (loop for i below n-commands
-              do (let ((timings (aref timings i)))
-                   (print-command-name i :mean (length timings))
-                   (print-timing (estimate-mean timings geometricp))))
-        (setq geometricp (not geometricp))))
+      (let ((prev nil))
+        (loop
+          (terpri)
+          (let ((min-n-runs (min-n-runs timings)))
+            (when (<= runs min-n-runs)
+              (return))
+            (print-heading (1+ min-n-runs) "D")
+            ;; Run commands until the minimum number of runs changes.
+            (loop
+              do (let* ((i (random n-commands))
+                        (fn (elt fns i)))
+                   (print-command-name i :random)
+                   (with-timing
+                       (lambda (timing)
+                         (print-timing timing)
+                         (push timing (aref timings i))
+                         (when prev
+                           (push timing (aref timings-after prev i)))
+                         (setq prev i))
+                     fn))
+              while (= min-n-runs (min-n-runs timings))))
+          (loop for i below n-commands
+                do (let ((timings (aref timings i)))
+                     (print-command-name i :mean (length timings))
+                     (print-timing (estimate-mean timings geometricp))))
+          (setq geometricp (not geometricp))
+          (loop for i below n-commands
+                do (let ((timings (aref timings i)))
+                     (print-command-name i :mean (length timings))
+                     (print-timing (estimate-mean timings geometricp))))
+          (setq geometricp (not geometricp))
+          (check-assumption timings timings-after :real-time-ms geometricp))))
     (format t "Total runs: ~D~%" (loop for timings across timings
                                        sum (length timings)))
     (map 'list (lambda (timings)
                  (estimate-mean timings geometricp))
          timings)))
+
+(defun check-assumption (timings timings-after key geometricp)
+  ;; Assuming order (AREF TIMINGS-AFTER I J), where I is the previous,
+  ;; J is the current program (the index of).
+  (let* ((ta timings-after)
+         (n-commands (array-dimension ta 0))
+         ;; The "complement" of TA. Timings after I /= J.
+         (tac (make-array (list n-commands n-commands) :initial-element ())))
+    ;; Populate TAC
+    (dotimes (j n-commands)
+      (let ((j-timings (aref timings j)))
+        (dotimes (i n-commands)
+          (let ((i-j-timings (aref timings-after i j)))
+            (setf (aref tac i j) (set-difference j-timings i-j-timings))))))
+    ;; If the assumption holds, then for each i, E[L | i, j] - E[L |
+    ;; not i, j] = E[L | i, k] - E[L | not i, k] for all j and k.
+    (let ((diffs (make-array (list n-commands n-commands))))
+      (dotimes (i n-commands)
+        (dotimes (j n-commands)
+          (setf (aref diffs i j)
+                (maybe-exp
+                 (- (maybe-log (timings-mean (aref ta i j) key geometricp)
+                               geometricp)
+                    (maybe-log (timings-mean (aref tac i j) key geometricp)
+                               geometricp))
+                 geometricp))))
+      (dotimes (i n-commands)
+        (dotimes (j n-commands)
+          (format t " ~5,2F" (/ (aref diffs i j) 1000 *time-unit*)))
+        (terpri)))))
 
 #+nil
 (time/delta (list (lambda () (sleep (+ 0.075 (random 0.05))))

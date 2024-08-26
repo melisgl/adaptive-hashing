@@ -26,8 +26,6 @@
 ;;;;
 ;;;; - Timeouts
 ;;;;
-;;;; - Use better clocks (e.g. clock_gettime?)
-;;;;
 ;;;; - Better estimate measurement overhead
 ;;;;
 ;;;; - Differential timing? (https://www.youtube.com/watch?v=vrfYLlR8X8k&t=914s)
@@ -113,7 +111,7 @@
 ;;; Add :RUN-TIME-US to PLIST to make it a TIMING. PLIST is the
 ;;; argument list SB-EXT:CALL-WITH-TIMING calls its TIMER argument
 ;;; with.
-(defun %make-timing (plist)
+(defun %make-timing (&rest plist)
   (let ((plist (copy-list plist)))
     (setf (getf plist :run-time-us)
           (cons (+ (timing-value plist :user-run-time-us)
@@ -124,11 +122,27 @@
 
 ;;; Like SB-EXT:CALL-WITH-TIMING, but TIMER is called with a TIMING.
 (defmacro with-timing (timer fn)
-  (alexandria:with-unique-names (args)
-    `(sb-ext:call-with-timing
-      (lambda (&rest ,args)
-        (funcall ,timer (%make-timing ,args)))
-      ,fn)))
+  (alexandria:with-unique-names
+      (start-clock-sec start-clock-ns end-clock-sec end-clock-ns args)
+    `(let ((,start-clock-sec nil)
+           (,start-clock-ns nil)
+           (,end-clock-sec nil)
+           (,end-clock-ns nil))
+       (sb-ext:call-with-timing
+        (lambda (&rest ,args)
+          (let ((real-time-ns (+ (* #.(expt 10 9)
+                                    (- ,end-clock-sec ,start-clock-sec))
+                                 (- ,end-clock-ns ,start-clock-ns))))
+            (funcall ,timer (apply #'%make-timing :real-time-ns real-time-ns
+                                   ,args))))
+        (lambda ()
+          (multiple-value-setq (,start-clock-sec ,start-clock-ns)
+            (sb-unix:clock-gettime
+             ;; FIXME: This is CLOCK_MONOTONIC.
+             1))
+          (funcall ,fn)
+          (multiple-value-setq (,end-clock-sec ,end-clock-ns)
+            (sb-unix:clock-gettime 1)))))))
 
 (defun timing-value (timing key)
   (let ((x (if (functionp key)
@@ -260,9 +274,9 @@
                          ;; Biased sample stddev
                          (* (sqrt n-measurements) stddev))
                  (format t "                "))))
-      (print-real-or-run-time (/ (value :real-time-ms) 1000 time-unit)
-                              (/ (sqrt (uncertainty :real-time-ms))
-                                 1000 time-unit))
+      (print-real-or-run-time (/ (value :real-time-ns) #.(expt 10 9) time-unit)
+                              (/ (sqrt (uncertainty :real-time-ns))
+                                 #.(expt 10 9) time-unit))
       (format t " ")
       (print-real-or-run-time (/ (value :run-time-us) 1000000 time-unit)
                               (/ (sqrt (uncertainty :run-time-us))
@@ -323,11 +337,11 @@
   (let ((means (map 'vector
                     (lambda (timings)
                       ;; FIXME: geometric?
-                      (timings-mean timings :real-time-ms nil))
+                      (timings-mean timings :real-time-ns nil))
                     timings-vector))
         (variances (map 'vector
                         (lambda (timings)
-                          (timings-variance timings :real-time-ms))
+                          (timings-variance timings :real-time-ns))
                         timings-vector)))
     (/ (max-rsd means variances)
        (sqrt (length (aref timings-vector 0))))))
@@ -380,7 +394,7 @@
                        do (print-command-name i :mean)
                           (print-timing (estimate-mean (aref timings i)
                                                        geometricp)))
-                 (check-assumption timings timings-after :real-time-ms
+                 (check-assumption timings timings-after :real-time-ns
                                    geometricp command-names))))
     (format t "~%Total runs: ~S~%" (* runs n-commands))
     (map 'list (lambda (timings)
@@ -454,7 +468,7 @@
                 do (let ((timings (aref timings i)))
                      (print-command-name i :mean (length timings))
                      (print-timing (estimate-mean timings geometricp))))
-          (check-assumption timings timings-after :real-time-ms geometricp
+          (check-assumption timings timings-after :real-time-ns geometricp
                             command-names))))
     (format t "Total runs: ~D~%" (loop for timings across timings
                                        sum (length timings)))
@@ -492,7 +506,7 @@
           (format t " ~5F"
                   (if geometricp
                       (aref diffs i j)
-                      (/ (aref diffs i j) 1000 *time-unit*))))
+                      (/ (aref diffs i j) #.(expt 10 9) *time-unit*))))
         (terpri)))))
 
 #+nil
@@ -715,11 +729,7 @@
 
 (defun burn-cpu (&key (n-threads 1) (n 1))
   (declare (type (integer 0 10) n))
-  (mapc #'sb-thread:join-thread
-        (loop repeat n-threads
-              collect (sb-thread:make-thread
-                       (lambda ()
-                         (loop for i below (* n 59999999)))))))
+  (loop for i below (* n 59999999)))
 
 (defun burn-cpu-2 (&key (n 1))
   (declare (type (integer 0 10) n))
@@ -729,23 +739,42 @@
 #+nil
 (loop (burn-cpu))
 #+nil
-(time/delta (list ;; #'burn-cpu-2
-                  ;; #'burn-cpu
-                  ;; #'burn-cpu-2
-                  ;; #'burn-cpu
+(with-timing #'print (lambda () (sleep 0.1)))
+
+#+nil
+(time/delta (list #'burn-cpu-2
+                  #'burn-cpu)
+            :geometricp t
+            :runs 2000 :time-unit 0.01)
+
+#+nil
+(time/beta (list #'burn-cpu-2
+                 #'burn-cpu)
+           :geometricp t
+           :runs 2000 :time-unit 0.01)
+
+#+nil
+(time/delta (list #'burn-cpu-2
+                  #'burn-cpu
+                  #'burn-cpu-2
+                  #'burn-cpu
+                  #'burn-cpu-2
+                  #'burn-cpu
+                  #'burn-cpu-2
+                  #'burn-cpu
                   #'burn-cpu-2
                   #'burn-cpu)
             :geometricp t
             :runs 400 :time-unit 0.01)
 #+nil
-(sb-thread:join-thread
- (sb-thread:make-thread (lambda () (princ-to-string *random-state*))))
-
-#+nil
-(time/beta (list ;; #'burn-cpu-2
-                 ;; #'burn-cpu
-                 ;; #'burn-cpu-2
-                 ;; #'burn-cpu
+(time/beta (list #'burn-cpu-2
+                 #'burn-cpu
+                 #'burn-cpu-2
+                 #'burn-cpu
+                 #'burn-cpu-2
+                 #'burn-cpu
+                 #'burn-cpu-2
+                 #'burn-cpu
                  #'burn-cpu-2
                  #'burn-cpu)
            :geometricp t

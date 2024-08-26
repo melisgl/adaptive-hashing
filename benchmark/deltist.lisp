@@ -486,7 +486,7 @@
                        (timings-mean (aref tac i j) key nil))))))
       (dotimes (i n-commands)
         (dotimes (j n-commands)
-          (format t " ~5,3F"
+          (format t " ~5F"
                   (if geometricp
                       (aref diffs i j)
                       (/ (aref diffs i j) 1000 *time-unit*))))
@@ -704,8 +704,6 @@
 ;;;; Show that delta works better than absolute
 ;;;;
 ;;;; Plot delta vs number of runs? (repeated, with error bars)
-;;;;
-;;;; Needs geometric averaging
 
 #+nil
 (defun burn-cpu (&key (n 1))

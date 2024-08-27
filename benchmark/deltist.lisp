@@ -150,7 +150,7 @@
 
 ;;; This is the variance of the measurement (0 by default). Currently
 ;;; only used when multiple timings are averaged and their sample
-;;; variance is estimated (see ESTIMATE-MEAN).
+;;; variance is estimated (see MEAN-TIMING).
 (defun timing-uncertainty (timing key)
   (let ((x (if (functionp key)
                (funcall key timing)
@@ -159,6 +159,7 @@
              (cdr x))
         0)))
 
+;;; FIXME: What is this for?
 (defun timing-n-measurements (timing)
   (getf timing :n-measurements 1))
 
@@ -204,7 +205,7 @@
 ;;; Return a timing whose TIMING-VALUEs are the estimated means of
 ;;; TIMINGS, and whose TIMING-UNCERTAINTYs are the estimated variance
 ;;; of the mean estimate. TIMINGS must be i.i.d. measurements (FIXME).
-(defun estimate-mean (timings geometricp)
+(defun mean-timing (timings geometricp)
   (let ((keys (loop for rest on (first timings) by #'cddr
                     collect (first rest)))
         (n-measurements (loop for timing in timings
@@ -387,13 +388,13 @@
                                                    :geometric-mean
                                                    :arithmetric-mean)
                                              (length timings))
-                         (print-timing (estimate-mean timings geometricp))))
+                         (print-timing (mean-timing timings geometricp))))
               (check-assumption timings timings-after :real-time-ns geometricp
                                 command-names))))))
     (format t "~%Total runs: ~D~%" (loop for timings across timings
                                          sum (length timings)))
     (map 'list (lambda (timings)
-                 (estimate-mean timings geometricp))
+                 (mean-timing timings geometricp))
          timings)))
 
 (defun check-assumption (timings timings-after key geometricp command-names)

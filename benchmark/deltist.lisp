@@ -100,9 +100,12 @@
 
 ;;;; Timing
 
+(defconstant +ns+ (expt 10 9))
+
 ;;; Add :RUN-TIME-US to PLIST to make it a TIMING. PLIST is the
 ;;; argument list SB-EXT:CALL-WITH-TIMING calls its TIMER argument
-;;; with.
+;;; with. :RUN-TIME-US is no longer used though, so maybe this can be
+;;; removed.
 (defun %make-timing (&rest plist)
   (let ((plist (copy-list plist)))
     (setf (getf plist :run-time-us)
@@ -122,8 +125,7 @@
            (,end-clock-ns nil))
        (sb-ext:call-with-timing
         (lambda (&rest ,args)
-          (let ((real-time-ns (+ (* #.(expt 10 9)
-                                    (- ,end-clock-sec ,start-clock-sec))
+          (let ((real-time-ns (+ (* +ns+ (- ,end-clock-sec ,start-clock-sec))
                                  (- ,end-clock-ns ,start-clock-ns))))
             (funcall ,timer (apply #'%make-timing :real-time-ns real-time-ns
                                    ,args))))
@@ -266,9 +268,9 @@
                          ;; Biased sample stddev
                          (* (sqrt n-measurements) stddev))
                  (format t "                "))))
-      (print-real-or-run-time (/ (value :real-time-ns) #.(expt 10 9) time-unit)
+      (print-real-or-run-time (/ (value :real-time-ns) +ns+ time-unit)
                               (/ (sqrt (uncertainty :real-time-ns))
-                                 #.(expt 10 9) time-unit))
+                                 +ns+ time-unit))
       (format t " ")
       (print-real-or-run-time (/ (value :run-time-us) 1000000 time-unit)
                               (/ (sqrt (uncertainty :run-time-us))
@@ -518,7 +520,7 @@
                 (format t " ~5F"
                         (if geometricp
                             d
-                            (/ d #.(expt 10 9) *time-unit*))))))
+                            (/ d +ns+ *time-unit*))))))
         (terpri)))))
 
 #+nil

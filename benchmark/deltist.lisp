@@ -186,7 +186,7 @@
                    (/ sum n))
                geometricp)))
 
-(defun timings-variance (timings key)
+(defun timings-variance-of-mean (timings key)
   (let ((mean (timings-mean timings key nil))
         (sum 0)
         (sum-variances 0))
@@ -195,8 +195,9 @@
                  (incf sum (expt (- x mean) 2))
                  (incf sum-variances (timing-uncertainty timing key))))
          timings)
-    (+ (/ sum (length timings))
-       sum-variances)))
+    (/ (+ (/ sum (length timings))
+          sum-variances)
+       (length timings))))
 
 (defun timing-rse (timing)
   (/ (sqrt (timing-uncertainty timing :real-time-ns))
@@ -204,41 +205,13 @@
 
 ;;; Return a timing whose TIMING-VALUEs are the estimated means of
 ;;; TIMINGS, and whose TIMING-UNCERTAINTYs are the estimated variance
-;;; of the mean estimate. TIMINGS must be i.i.d. measurements (FIXME).
+;;; of that mean.
 (defun mean-timing (timings geometricp)
   (let ((keys (loop for rest on (first timings) by #'cddr
-                    collect (first rest)))
-        (n-measurements (loop for timing in timings
-                              sum (timing-n-measurements timing))))
-    (list* :n-measurements n-measurements
-           (loop for key in keys
-                 unless (eq key :n-measurements)
-                   append (list key (cons (timings-mean timings key geometricp)
-                                          (/ (timings-variance timings key)
-                                             n-measurements)))))))
-
-;;; Sum TIMINGS (both their values and variances are summed). The
-;;; values are summed in the log domain if GEOMETRICP (i.e.
-;;; expsumlog).
-(defun sum-timings (timings geometricp)
-  (let ((n (max 1 (length timings))))
-    (flet ((sum-values (key)
-             (maybe-exp (/ (loop for timing in timings
-                                 sum (maybe-log (timing-value timing key)
-                                                geometricp))
-                           n)
-                        geometricp))
-           (sum-uncertainties (key)
-             (/ (loop for timing in timings
-                      sum (timing-uncertainty timing key))
-                (expt n 2))))
-      (let ((keys (loop for rest on (first timings) by #'cddr
-                        collect (first rest))))
-        (list* :n-measurements 1
-               (loop for key in keys
-                     unless (eq key :n-measurements)
-                       append (list key (cons (sum-values key)
-                                              (sum-uncertainties key)))))))))
+                    collect (first rest))))
+    (loop for key in keys
+          append (list key (cons (timings-mean timings key geometricp)
+                                 (timings-variance-of-mean timings key))))))
 
 (defvar *time-unit* 1)
 
@@ -253,37 +226,36 @@
           *print-timing-gc*))
 
 (defun print-timing (timing &key (time-unit *time-unit*))
-  (let ((n-measurements (timing-n-measurements timing)))
-    (flet ((value (key)
-             (timing-value timing key))
-           (uncertainty (key)
-             (timing-uncertainty timing key))
-           (print-real-or-run-time (mean stddev)
-             (format t "~7,3F" mean)
-             (if (or (/= n-measurements 1) (/= stddev 0))
-                 (format t " ~6,2F% ~7,3F"
-                         ;; Relative Standard Error (stddev of our
-                         ;; estimate of the mean)
-                         (if (zerop mean)
-                             0
-                             (* 100 (/ stddev mean)))
-                         ;; Biased sample stddev
-                         (* (sqrt n-measurements) stddev))
-                 (format t "                "))))
-      (print-real-or-run-time (/ (* (value :real-time-ns) +ns+) time-unit)
-                              (/ (* (sqrt (uncertainty :real-time-ns)) +ns+)
-                                 time-unit))
-      (format t " ")
-      (print-real-or-run-time (/ (value :run-time-us) 1000000 time-unit)
-                              (/ (sqrt (uncertainty :run-time-us))
-                                 1000000 time-unit))
-      (format t " (~7,3F + ~7,3F~@[, ~7,3F~])~%"
-              (/ (value :user-run-time-us) 1000000 time-unit)
-              (/ (value :system-run-time-us) 1000000 time-unit)
-              (and *print-timing-gc*
-                   ;; FIXME: :GC-REAL-TIME-MS?
-                   (getf timing :gc-run-time-ms)
-                   (/ (value :gc-run-time-ms) 1000 time-unit))))))
+  (flet ((value (key)
+           (timing-value timing key))
+         (uncertainty (key)
+           (timing-uncertainty timing key))
+         (print-real-or-run-time (mean stddev)
+           (format t "~7,3F" mean)
+           (if (/= stddev 0)
+               (format t " ~6,2F% ~7,3F"
+                       ;; Relative Standard Error (stddev of our
+                       ;; estimate of the mean)
+                       (if (zerop mean)
+                           0
+                           (* 100 (/ stddev mean)))
+                       ;; Biased sample stddev
+                       stddev)
+               (format t "                "))))
+    (print-real-or-run-time (/ (* (value :real-time-ns) +ns+) time-unit)
+                            (/ (* (sqrt (uncertainty :real-time-ns)) +ns+)
+                               time-unit))
+    (format t " ")
+    (print-real-or-run-time (/ (value :run-time-us) 1000000 time-unit)
+                            (/ (sqrt (uncertainty :run-time-us))
+                               1000000 time-unit))
+    (format t " (~7,3F + ~7,3F~@[, ~7,3F~])~%"
+            (/ (value :user-run-time-us) 1000000 time-unit)
+            (/ (value :system-run-time-us) 1000000 time-unit)
+            (and *print-timing-gc*
+                 ;; FIXME: :GC-REAL-TIME-MS?
+                 (getf timing :gc-run-time-ms)
+                 (/ (value :gc-run-time-ms) 1000 time-unit)))))
 
 
 ;;;; Commands
@@ -523,7 +495,7 @@
              (loop for i below n-commands
                    do (format t "~A ~A " (if geometricp "geom" "arit")
                               (command-name command-names i))
-                      (print-timing (sum-timings (aref command-timings i)
+                      (print-timing (mean-timing (aref command-timings i)
                                                  geometricp)
                                     :time-unit time-unit))))
       (loop for benchmark in benchmarks
@@ -566,7 +538,7 @@
                                        (lambda () (sleep 0.2))))
                      (:commands ,(list (lambda () (sleep 0.01))
                                        (lambda () (sleep 0.02)))))
-                   #'time/beta)
+                   #'estimate-run-times)
 
 
 ;;;; Command line
@@ -624,20 +596,6 @@
   (loop for m across means
         for v across variances
         maximize (/ (sqrt v) (abs m))))
-
-;;; TIMINGS-VECTOR holds i.i.d. timings.
-(defun max-rse-of-timings (timings-vector)
-  (let ((means (map 'vector
-                    (lambda (timings)
-                      ;; FIXME: geometric?
-                      (timings-mean timings :real-time-ns nil))
-                    timings-vector))
-        (variances (map 'vector
-                        (lambda (timings)
-                          (timings-variance timings :real-time-ns))
-                        timings-vector)))
-    (/ (max-rsd means variances)
-       (sqrt (length (aref timings-vector 0))))))
 
 (defun deltist ()
   (redefine-get-system-info)
@@ -723,44 +681,45 @@
 (with-timing #'print (lambda () (sleep 0.1)))
 
 #+nil
-(time/delta (list #'burn-cpu-2
-                  #'burn-cpu)
-            :geometricp t
-            :runs 2000 :time-unit 0.0001)
+(estimate-run-times (list #'burn-cpu-2
+                          #'burn-cpu)
+                    :estimator :delta :runs 2000 :geometricp t
+                    :time-unit 0.0001)
 
 #+nil
-(time/beta (list #'burn-cpu-2
-                 #'burn-cpu)
-           :geometricp t
-           :runs 2000 :time-unit 0.0001)
+(estimate-run-times (list #'burn-cpu-2
+                          #'burn-cpu)
+                    :estimator :beta :runs 2000 :geometricp t
+                    :time-unit 0.0001)
 
 ;;; FIXME: Arithmethic average of geometric averages ...
 #+nil
-(time/delta (list #'burn-cpu-2
-                  #'burn-cpu
-                  #'burn-cpu-2
-                  #'burn-cpu
-                  #'burn-cpu-2
-                  #'burn-cpu
-                  #'burn-cpu-2
-                  #'burn-cpu
-                  #'burn-cpu-2
-                  #'burn-cpu)
-            :geometricp t
-            :runs 400 :time-unit 0.0001)
+(estimate-run-times (list #'burn-cpu-2
+                          #'burn-cpu
+                          #'burn-cpu-2
+                          #'burn-cpu
+                          #'burn-cpu-2
+                          #'burn-cpu
+                          #'burn-cpu-2
+                          #'burn-cpu
+                          #'burn-cpu-2
+                          #'burn-cpu)
+                    :estimator :delta :runs 400 :geometricp t
+                    :time-unit 0.0001)
+
 #+nil
-(time/beta (list #'burn-cpu-2
-                 #'burn-cpu
-                 #'burn-cpu-2
-                 #'burn-cpu
-                 #'burn-cpu-2
-                 #'burn-cpu
-                 #'burn-cpu-2
-                 #'burn-cpu
-                 #'burn-cpu-2
-                 #'burn-cpu)
-           :geometricp t
-           :runs 400 :time-unit 0.0001)
+(estimate-run-times (list #'burn-cpu-2
+                          #'burn-cpu
+                          #'burn-cpu-2
+                          #'burn-cpu
+                          #'burn-cpu-2
+                          #'burn-cpu
+                          #'burn-cpu-2
+                          #'burn-cpu
+                          #'burn-cpu-2
+                          #'burn-cpu)
+                    :estimator :beta :runs 400 :geometricp t
+                    :time-unit 0.0001)
 
 #+nil
 (loop repeat 2 do

@@ -3,6 +3,15 @@
 ;;;; - Even with interleaving, there is some unexplained variance
 ;;;;   left.
 ;;;;
+;;;; - Use CLOCK_PROCESS_CPUTIME_ID?
+;;;;
+;;;; - Stddev is not very useful for the geometric avarage line. It
+;;;;   would be more meaningful if all data was in the log domain.
+;;;;   Maybe copy the timing and take the log of all values; or add a
+;;;;   log option to all timing accessors and functions?
+;;;;
+;;;; - Print table of ratios?
+;;;;
 ;;;; - Add parallel option (as opposed to interleaved)?
 ;;;;
 ;;;; - Track other statistics (e.g. rank (estimate the probability of
@@ -666,7 +675,7 @@
   (declare (type (integer 0 10) n))
   (loop for i below (* n 99999999)))
 
-(defun burn-cpu (&key (n-threads 1) (n 1))
+(defun burn-cpu (&key (n 1))
   (declare (type (integer 0 10) n))
   (loop for i below (* n 999999)))
 

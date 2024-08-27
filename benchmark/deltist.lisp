@@ -319,75 +319,13 @@
                     command)))
 
 
-;;;; Estimating the run time
+;;;; Estimating the run times of multiple commands with either Delta
+;;;; or Beta estimator
 
-#+nil
-(defun time/ (commands &key command-names (warmup 0) (runs 10)
-                         measure-gc (geometricp t) (time-unit *time-unit*))
-  (let* ((fns (commands-to-functions commands command-names))
-         (n-commands (length fns))
-         (timings (make-array n-commands :initial-element ()))
-         (timings-after (make-array (list n-commands n-commands)
-                                    :initial-element ()))
-         (*time-unit* time-unit)
-         (*print-timing-gc* measure-gc))
-    (flet ((print-command-name (command-index kind)
-             (format t "~A ~A " (ecase kind
-                                  ((:shuffled) "shuf")
-                                  ((:ordered) "    ")
-                                  ((:mean) (if geometricp "geom" "arit")))
-                     (command-name command-names command-index))
-             (force-output)))
-      (when (plusp warmup)
-        (format t "~%Warming up~%")
-        (loop for run below warmup do
-          (terpri)
-          (print-heading (1+ run) "B")
-          (loop for i in (random-permutation n-commands)
-                do (print-command-name i :shuffled)
-                   (with-timing #'print-timing
-                     (elt fns i)))))
-      (format t "~%Benchmarking~%")
-      (let ((prev nil)
-            (mod (max 1 (floor runs 100))))
-        (loop for run below runs
-              do (let ((printp (or (zerop (mod run mod))
-                                   (= run (1- runs)))))
-                   (when printp
-                     (terpri)
-                     (print-heading (1+ run) "B"))
-                   (loop for i in (random-permutation n-commands)
-                         do (let ((fn (elt fns i)))
-                              (when printp
-                                (print-command-name i :shuffled))
-                              (with-timing
-                                  (lambda (timing)
-                                    (when printp
-                                      (print-timing timing))
-                                    (push timing (aref timings i))
-                                    (when prev
-                                      (push timing (aref timings-after prev i)))
-                                    (setq prev i))
-                                fn)))
-                   (when printp
-                     (loop for i below n-commands
-                           do (print-command-name i :ordered)
-                              (print-timing (first (aref timings i))))
-                     (loop for i below n-commands
-                           do (print-command-name i :mean)
-                              (print-timing (estimate-mean (aref timings i)
-                                                           geometricp)))
-                     (check-assumption timings timings-after :real-time-ns
-                                       geometricp command-names))))))
-    (format t "~%Total runs: ~S~%" (* runs n-commands))
-    (map 'list (lambda (timings)
-                 (estimate-mean timings geometricp))
-         timings)))
-
-(defun estimate-run-time (commands
-                          &key command-names
-                            (estimator :delta) (warmup 0) (runs 10)
-                            measure-gc (geometricp t) (time-unit *time-unit*))
+(defun estimate-run-times (commands
+                           &key command-names
+                             (estimator :delta) (warmup 0) (runs 10)
+                             measure-gc (geometricp t) (time-unit *time-unit*))
   (let* ((fns (commands-to-functions commands command-names))
          (n-commands (length fns))
          (timings (make-array n-commands :initial-element ()))
@@ -402,13 +340,7 @@
          (prev nil)
          (printp nil))
     (flet ((print-command-name (command-index kind &optional n)
-             (format t "~A ~A " (ecase kind
-                                  ((:shuffled) "shuf")
-                                  ((:arithmetic-mean) (format nil "A~3D" n))
-                                  ((:geometric-mean) (format nil "G~3D" n))
-                                  ((:random) "rand"))
-                     (command-name command-names command-index))
-             (force-output))
+             (print-command-name command-names command-index kind n))
            (min-n-runs ()
              (loop for timings across timings
                    minimizing (length timings)))
@@ -534,13 +466,13 @@
   (force-output))
 
 #+nil
-(estimate-run-time (list (lambda () (sleep (+ 0.075 (random 0.05))))
-                         (lambda () (sleep (+ 0.175 (random 0.05)))))
-                   :estimator :delta)
+(estimate-run-times (list (lambda () (sleep (+ 0.075 (random 0.05))))
+                          (lambda () (sleep (+ 0.175 (random 0.05)))))
+                    :estimator :delta)
 #+nil
-(estimate-run-time (list (lambda () (sleep (+ 0.075 (random 0.05))))
-                         (lambda () (sleep (+ 0.175 (random 0.05)))))
-                   :estimator :beta)
+(estimate-run-times (list (lambda () (sleep (+ 0.075 (random 0.05))))
+                          (lambda () (sleep (+ 0.175 (random 0.05)))))
+                    :estimator :beta)
 
 
 ;;;; Benchmarks
@@ -711,27 +643,28 @@
   (handler-case
       (multiple-value-bind (options commands)
           (parse-arguments (rest sb-ext:*posix-argv*))
-        (let ((*random-state* (make-random-state t))
-              (estimator (get-option-categorical-value options "--estimator"
-                                                       '("delta" "beta")
-                                                       "delta"))
-              (geometricp (get-option-boolean-value options "--geometric" t))
-              (time-unit (get-option-real-value options "--time-unit" 1))
-              (warmup (get-option-integer-value options "--warmup" 1))
-              (runs (get-option-integer-value options "--runs" 10))
-              (command-names
-                (split-sequence:split-sequence
-                 #\Space (get-option-string-value options "--command-names"
-                                                  nil)
-                 :remove-empty-subseqs t))
-              (benchmark-file (get-option-string-value options
-                                                       "--benchmark-file"
-                                                       nil))
-              (shuffle-benchmarks (get-option-boolean-value
-                                   options "--shuffle-benchmarks" nil))
-              (max-rse (get-option-real-value options "--max-rse" 0.001))
-              (skip-high-rse (get-option-boolean-value
-                              options "--skip-high-rse" nil)))
+        (let* ((*random-state* (make-random-state t))
+               (estimator (get-option-categorical-value options "--estimator"
+                                                        '("delta" "beta")
+                                                        "delta"))
+               (estimator (if (string= estimator "delta") :delta :beta))
+               (geometricp (get-option-boolean-value options "--geometric" t))
+               (time-unit (get-option-real-value options "--time-unit" 1))
+               (warmup (get-option-integer-value options "--warmup" 1))
+               (runs (get-option-integer-value options "--runs" 10))
+               (command-names
+                 (split-sequence:split-sequence
+                  #\Space (get-option-string-value options "--command-names"
+                                                   nil)
+                  :remove-empty-subseqs t))
+               (benchmark-file (get-option-string-value options
+                                                        "--benchmark-file"
+                                                        nil))
+               (shuffle-benchmarks (get-option-boolean-value
+                                    options "--shuffle-benchmarks" nil))
+               (max-rse (get-option-real-value options "--max-rse" 0.001))
+               (skip-high-rse (get-option-boolean-value
+                               options "--skip-high-rse" nil)))
           (format t "~%estimator: ~A, geometric: ~S, time-unit: ~F sec, ~
                      warmup: ~S, runs: ~S, ~%~
                      benchmark-file: ~S, shuffle-benchmarks: ~S, ~
@@ -739,14 +672,12 @@
                   estimator geometricp time-unit warmup runs
                   benchmark-file shuffle-benchmarks max-rse skip-high-rse)
           (flet ((time-it (commands)
-                   (estimate-run-time commands
-                                      :command-names command-names
-                                      :estimator (if (string= estimator "delta")
-                                                     :delta
-                                                     :beta)
-                                      :warmup warmup :runs runs
-                                      :measure-gc nil :geometricp geometricp
-                                      :time-unit time-unit)))
+                   (estimate-run-times commands
+                                       :command-names command-names
+                                       :estimator estimator
+                                       :warmup warmup :runs runs
+                                       :measure-gc nil :geometricp geometricp
+                                       :time-unit time-unit)))
             (when commands
               (time-it commands))
             (when benchmark-file

@@ -3,8 +3,6 @@
 ;;;; - Even with interleaving, there is some unexplained variance
 ;;;;   left.
 ;;;;
-;;;; - Why is MAX-RSE based on real time?
-;;;;
 ;;;; - Add parallel option (as opposed to interleaved)?
 ;;;;
 ;;;; - Track other statistics (e.g. rank (estimate the probability of
@@ -24,8 +22,6 @@
 ;;;; - DEFTESTlike macro?
 ;;;;
 ;;;; - Handle failures (<= 1 exit-code 127)?
-;;;;
-;;;; - Measurement granularity vs max-rse
 ;;;;
 ;;;;
 ;;;; ---- Generalization -----
@@ -123,6 +119,7 @@
            (,start-clock-ns nil)
            (,end-clock-sec nil)
            (,end-clock-ns nil))
+       ;; Using getrusage(), this has at best microsecond resolution.
        (sb-ext:call-with-timing
         (lambda (&rest ,args)
           (let ((real-time-ns (+ (* +ns+ (- ,end-clock-sec ,start-clock-sec))
@@ -130,6 +127,7 @@
             (funcall ,timer (apply #'%make-timing :real-time-ns real-time-ns
                                    ,args))))
         (lambda ()
+          ;; The higher resolution timer goes inside, of course.
           (multiple-value-setq (,start-clock-sec ,start-clock-ns)
             (sb-unix:clock-gettime
              ;; FIXME: This is CLOCK_MONOTONIC.
@@ -148,8 +146,8 @@
         0)))
 
 ;;; This is the variance of the measurement (0 by default). Currently
-;;; only used when multiple timings averaged and their sample variance
-;;; is estimated (see ESTIMATE-MEAN).
+;;; only used when multiple timings are averaged and their sample
+;;; variance is estimated (see ESTIMATE-MEAN).
 (defun timing-uncertainty (timing key)
   (let ((x (if (functionp key)
                (funcall key timing)
@@ -197,8 +195,8 @@
        sum-variances)))
 
 (defun timing-rse (timing)
-  (/ (sqrt (timing-uncertainty timing :real-time-ms))
-     (+ (timing-value timing :real-time-ms) 1e-7)))
+  (/ (sqrt (timing-uncertainty timing :real-time-ns))
+     (+ (timing-value timing :real-time-ns) #.(/ +ns+))))
 
 ;;; Return a timing whose TIMING-VALUEs are the estimated means of
 ;;; TIMINGS, and whose TIMING-UNCERTAINTYs are the estimated variance

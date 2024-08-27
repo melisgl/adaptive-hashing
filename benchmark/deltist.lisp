@@ -111,6 +111,9 @@
                    (timing-uncertainty plist :system-run-time-us))))
     plist))
 
+;;; FIXME: hard coded
+(defconstant +clock-monotonic+ 1)
+
 ;;; Like SB-EXT:CALL-WITH-TIMING, but TIMER is called with a TIMING.
 (defmacro with-timing (timer fn)
   (alexandria:with-unique-names
@@ -119,7 +122,8 @@
            (,start-clock-ns nil)
            (,end-clock-sec nil)
            (,end-clock-ns nil))
-       ;; Using getrusage(), this has at best microsecond resolution.
+       ;; This uses getrusage(), which has at best microsecond
+       ;; resolution.
        (sb-ext:call-with-timing
         (lambda (&rest ,args)
           (let ((real-time-ns (+ (* +ns+ (- ,end-clock-sec ,start-clock-sec))
@@ -129,12 +133,10 @@
         (lambda ()
           ;; The higher resolution timer goes inside, of course.
           (multiple-value-setq (,start-clock-sec ,start-clock-ns)
-            (sb-unix:clock-gettime
-             ;; FIXME: This is CLOCK_MONOTONIC.
-             1))
+            (sb-unix:clock-gettime +clock-monotonic+))
           (funcall ,fn)
           (multiple-value-setq (,end-clock-sec ,end-clock-ns)
-            (sb-unix:clock-gettime 1)))))))
+            (sb-unix:clock-gettime +clock-monotonic+)))))))
 
 (defun timing-value (timing key)
   (let ((x (if (functionp key)

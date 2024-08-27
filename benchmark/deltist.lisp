@@ -326,12 +326,16 @@
            (min-n-runs ()
              (loop for timings across timings
                    minimizing (length timings)))
-           (timer (timing i)
-             (when printp
-               (print-timing timing))
-             (push timing (aref timings i))
-             (when prev
-               (push timing (aref timings-after prev i)))
+           (timer (i kind)
+             (print-command-name command-names i kind)
+             (let ((fn (elt fns i)))
+               (with-timing (lambda (timing)
+                              (when printp
+                                (print-timing timing))
+                              (push timing (aref timings i))
+                              (when prev
+                                (push timing (aref timings-after prev i))))
+                 fn))
              (setq prev i)))
       (when (plusp warmup)
         (format t "~%Warming up~%")
@@ -356,11 +360,8 @@
                                                ((:delta) "D")
                                                ((:beta) "B"))))
             (ecase estimator
-              ((:delta) (run-delta-batch fns #'min-n-runs
-                                         #'print-command-name
-                                         #'timer))
-              ((:beta) (run-beta-batch fns #'print-command-name
-                                       #'timer)))
+              ((:delta) (run-delta-batch n-commands #'min-n-runs #'timer))
+              ((:beta) (run-beta-batch n-commands #'timer)))
             (assert (= (min-n-runs) (1+ min-n-runs)))
             (when printp
               (loop for i below n-commands
@@ -417,26 +418,15 @@
                             (/ (* d +ns+) *time-unit*))))))
         (terpri)))))
 
-(defun run-beta-batch (fns print-command-fn timer-fn)
-  (let ((n-commands (length fns)))
-    (loop for i in (random-permutation n-commands)
-          do (let ((fn (elt fns i)))
-               (funcall print-command-fn i :shuffled)
-               (with-timing (lambda (timing)
-                              (funcall timer-fn timing i))
-                 fn)))))
-
-(defun run-delta-batch (fns min-n-runs-fn print-command-fn timer-fn)
-  (let ((n-commands (length fns))
-        (min-n-runs (funcall min-n-runs-fn)))
+(defun run-delta-batch (n-commands min-n-runs-fn timer-fn)
+  (let ((min-n-runs (funcall min-n-runs-fn)))
     ;; Run commands until the minimum number of runs changes.
-    (loop do (let* ((i (random n-commands))
-                    (fn (elt fns i)))
-               (funcall print-command-fn i :random)
-               (with-timing (lambda (timing)
-                              (funcall timer-fn timing i))
-                 fn))
+    (loop do (funcall timer-fn (random n-commands) :random)
           while (= min-n-runs (funcall min-n-runs-fn)))))
+
+(defun run-beta-batch (n-commands timer-fn)
+  (loop for i in (random-permutation n-commands)
+        do (funcall timer-fn i :shuffled)))
 
 (defun print-command-name (command-names command-index kind &optional n)
   (format t "~A ~A " (ecase kind

@@ -319,30 +319,11 @@
                     command)))
 
 
-;;;; Beta estimator
+;;;; Estimating the run time
 
-;;; Return the maximum Relative Standard Deviation (sqrt(var) / abs(mean)).
-(defun max-rsd (means variances)
-  (loop for m across means
-        for v across variances
-        maximize (/ (sqrt v) (abs m))))
-
-;;; TIMINGS-VECTOR holds i.i.d. timings.
-(defun max-rse-of-timings (timings-vector)
-  (let ((means (map 'vector
-                    (lambda (timings)
-                      ;; FIXME: geometric?
-                      (timings-mean timings :real-time-ns nil))
-                    timings-vector))
-        (variances (map 'vector
-                        (lambda (timings)
-                          (timings-variance timings :real-time-ns))
-                        timings-vector)))
-    (/ (max-rsd means variances)
-       (sqrt (length (aref timings-vector 0))))))
-
-(defun time/beta (commands &key command-names (warmup 0) (runs 10)
-                             measure-gc (geometricp t) (time-unit *time-unit*))
+#+nil
+(defun time/ (commands &key command-names (warmup 0) (runs 10)
+                         measure-gc (geometricp t) (time-unit *time-unit*))
   (let* ((fns (commands-to-functions commands command-names))
          (n-commands (length fns))
          (timings (make-array n-commands :initial-element ()))
@@ -403,15 +384,10 @@
                  (estimate-mean timings geometricp))
          timings)))
 
-#+nil
-(time/beta (list (lambda () (sleep (+ 0.075 (random 0.05))))
-                 (lambda () (sleep (+ 0.175 (random 0.05))))))
-
-
-;;;; Delta estimator
-
-(defun time/delta (commands &key command-names (warmup 0) (runs 10)
-                              measure-gc (geometricp t) (time-unit *time-unit*))
+(defun estimate-run-time (commands
+                          &key command-names
+                            (estimator :delta) (warmup 0) (runs 10)
+                            measure-gc (geometricp t) (time-unit *time-unit*))
   (let* ((fns (commands-to-functions commands command-names))
          (n-commands (length fns))
          (timings (make-array n-commands :initial-element ()))
@@ -422,19 +398,27 @@
          (timings-after (make-array (list n-commands n-commands)
                                     :initial-element ()))
          (*time-unit* time-unit)
-         (*print-timing-gc* measure-gc))
+         (*print-timing-gc* measure-gc)
+         (prev nil)
+         (printp nil))
     (flet ((print-command-name (command-index kind &optional n)
              (format t "~A ~A " (ecase kind
                                   ((:shuffled) "shuf")
-                                  ((:mean) (format nil "~A~3D"
-                                                   (if geometricp "G" "A")
-                                                   n))
+                                  ((:arithmetic-mean) (format nil "A~3D" n))
+                                  ((:geometric-mean) (format nil "G~3D" n))
                                   ((:random) "rand"))
                      (command-name command-names command-index))
              (force-output))
-           (min-n-runs (timings)
+           (min-n-runs ()
              (loop for timings across timings
-                   minimizing (length timings))))
+                   minimizing (length timings)))
+           (timer (timing i)
+             (when printp
+               (print-timing timing))
+             (push timing (aref timings i))
+             (when prev
+               (push timing (aref timings-after prev i)))
+             (setq prev i)))
       (when (plusp warmup)
         (format t "~%Warming up~%")
         (loop for run below warmup do
@@ -445,42 +429,37 @@
                    (with-timing #'print-timing
                      (elt fns i)))))
       (format t "~%Benchmarking~%")
-      (let ((prev nil)
-            (mod (max 1 (floor runs 100))))
+      (let ((mod (max 1 (floor runs 100))))
         (loop
-          (let* ((min-n-runs (min-n-runs timings))
-                 (printp (or (zerop (mod min-n-runs mod))
-                             (= min-n-runs (1- runs)))))
+          (let ((min-n-runs (min-n-runs)))
+            (setq printp (or (zerop (mod min-n-runs mod))
+                             (= min-n-runs (1- runs))))
             (when (<= runs min-n-runs)
               (return))
             (when printp
               (terpri)
-              (print-heading (1+ min-n-runs) "D"))
-            ;; Run commands until the minimum number of runs changes.
-            (loop
-              do (let* ((i (random n-commands))
-                        (fn (elt fns i)))
-                   (when printp
-                     (print-command-name i :random))
-                   (with-timing
-                       (lambda (timing)
-                         (when printp
-                           (print-timing timing))
-                         (push timing (aref timings i))
-                         (when prev
-                           (push timing (aref timings-after prev i)))
-                         (setq prev i))
-                     fn))
-              while (= min-n-runs (min-n-runs timings)))
+              (print-heading (1+ min-n-runs) (ecase estimator
+                                               ((:delta) "D")
+                                               ((:beta) "B"))))
+            (ecase estimator
+              ((:delta) (run-delta-batch fns #'min-n-runs
+                                         #'print-command-name
+                                         #'timer))
+              ((:beta) (run-beta-batch fns #'print-command-name
+                                       #'timer)))
+            (assert (= (min-n-runs) (1+ min-n-runs)))
             (when printp
               (loop for i below n-commands
                     do (let ((timings (aref timings i)))
-                         (print-command-name i :mean (length timings))
+                         (print-command-name i (if geometricp
+                                                   :geometric-mean
+                                                   :arithmetric-mean)
+                                             (length timings))
                          (print-timing (estimate-mean timings geometricp))))
               (check-assumption timings timings-after :real-time-ns geometricp
                                 command-names))))))
     (format t "~%Total runs: ~D~%" (loop for timings across timings
-                                       sum (length timings)))
+                                         sum (length timings)))
     (map 'list (lambda (timings)
                  (estimate-mean timings geometricp))
          timings)))
@@ -524,10 +503,44 @@
                             (/ (* d +ns+) *time-unit*))))))
         (terpri)))))
 
+(defun run-beta-batch (fns print-command-fn timer-fn)
+  (let ((n-commands (length fns)))
+    (loop for i in (random-permutation n-commands)
+          do (let ((fn (elt fns i)))
+               (funcall print-command-fn i :shuffled)
+               (with-timing (lambda (timing)
+                              (funcall timer-fn timing i))
+                 fn)))))
+
+(defun run-delta-batch (fns min-n-runs-fn print-command-fn timer-fn)
+  (let ((n-commands (length fns))
+        (min-n-runs (funcall min-n-runs-fn)))
+    ;; Run commands until the minimum number of runs changes.
+    (loop do (let* ((i (random n-commands))
+                    (fn (elt fns i)))
+               (funcall print-command-fn i :random)
+               (with-timing (lambda (timing)
+                              (funcall timer-fn timing i))
+                 fn))
+          while (= min-n-runs (funcall min-n-runs-fn)))))
+
+(defun print-command-name (command-names command-index kind &optional n)
+  (format t "~A ~A " (ecase kind
+                       ((:shuffled) "shuf")
+                       ((:arithmetric-mean) (format nil "A~3D" n))
+                       ((:geometric-mean) (format nil "G~3D" n))
+                       ((:random) "rand"))
+          (command-name command-names command-index))
+  (force-output))
+
 #+nil
-(time/delta (list (lambda () (sleep (+ 0.075 (random 0.05))))
-                  (lambda () (sleep (+ 0.175 (random 0.05)))))
-            :runs 100 :geometricp t)
+(estimate-run-time (list (lambda () (sleep (+ 0.075 (random 0.05))))
+                         (lambda () (sleep (+ 0.175 (random 0.05)))))
+                   :estimator :delta)
+#+nil
+(estimate-run-time (list (lambda () (sleep (+ 0.075 (random 0.05))))
+                         (lambda () (sleep (+ 0.175 (random 0.05)))))
+                   :estimator :beta)
 
 
 ;;;; Benchmarks
@@ -673,6 +686,26 @@
 #+nil (parse-arguments '("-w" "1" "-r" "10" "--" "a" "b" "c"))
 #+nil (parse-arguments '("a" "b" "c"))
 
+;;; Return the maximum Relative Standard Deviation (sqrt(var) / abs(mean)).
+(defun max-rsd (means variances)
+  (loop for m across means
+        for v across variances
+        maximize (/ (sqrt v) (abs m))))
+
+;;; TIMINGS-VECTOR holds i.i.d. timings.
+(defun max-rse-of-timings (timings-vector)
+  (let ((means (map 'vector
+                    (lambda (timings)
+                      ;; FIXME: geometric?
+                      (timings-mean timings :real-time-ns nil))
+                    timings-vector))
+        (variances (map 'vector
+                        (lambda (timings)
+                          (timings-variance timings :real-time-ns))
+                        timings-vector)))
+    (/ (max-rsd means variances)
+       (sqrt (length (aref timings-vector 0))))))
+
 (defun deltist ()
   (redefine-get-system-info)
   (handler-case
@@ -706,14 +739,14 @@
                   estimator geometricp time-unit warmup runs
                   benchmark-file shuffle-benchmarks max-rse skip-high-rse)
           (flet ((time-it (commands)
-                   (funcall (if (string= estimator "delta")
-                                #'time/delta
-                                #'time/beta)
-                            commands
-                            :command-names command-names
-                            :warmup warmup :runs runs
-                            :measure-gc nil :geometricp geometricp
-                            :time-unit time-unit)))
+                   (estimate-run-time commands
+                                      :command-names command-names
+                                      :estimator (if (string= estimator "delta")
+                                                     :delta
+                                                     :beta)
+                                      :warmup warmup :runs runs
+                                      :measure-gc nil :geometricp geometricp
+                                      :time-unit time-unit)))
             (when commands
               (time-it commands))
             (when benchmark-file

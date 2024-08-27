@@ -96,7 +96,8 @@
 
 ;;;; Timing
 
-(defconstant +ns+ (expt 10 9))
+;;; One nanosecond in seconds
+(defconstant +ns+ (expt 10 -9))
 
 ;;; Add :RUN-TIME-US to PLIST to make it a TIMING. PLIST is the
 ;;; argument list SB-EXT:CALL-WITH-TIMING calls its TIMER argument
@@ -126,7 +127,7 @@
        ;; resolution.
        (sb-ext:call-with-timing
         (lambda (&rest ,args)
-          (let ((real-time-ns (+ (* +ns+ (- ,end-clock-sec ,start-clock-sec))
+          (let ((real-time-ns (+ (/ (- ,end-clock-sec ,start-clock-sec) +ns+)
                                  (- ,end-clock-ns ,start-clock-ns))))
             (funcall ,timer (apply #'%make-timing :real-time-ns real-time-ns
                                    ,args))))
@@ -198,7 +199,7 @@
 
 (defun timing-rse (timing)
   (/ (sqrt (timing-uncertainty timing :real-time-ns))
-     (+ (timing-value timing :real-time-ns) #.(/ +ns+))))
+     (+ (timing-value timing :real-time-ns) +ns+)))
 
 ;;; Return a timing whose TIMING-VALUEs are the estimated means of
 ;;; TIMINGS, and whose TIMING-UNCERTAINTYs are the estimated variance
@@ -268,9 +269,9 @@
                          ;; Biased sample stddev
                          (* (sqrt n-measurements) stddev))
                  (format t "                "))))
-      (print-real-or-run-time (/ (value :real-time-ns) +ns+ time-unit)
-                              (/ (sqrt (uncertainty :real-time-ns))
-                                 +ns+ time-unit))
+      (print-real-or-run-time (/ (* (value :real-time-ns) +ns+) time-unit)
+                              (/ (* (sqrt (uncertainty :real-time-ns)) +ns+)
+                                 time-unit))
       (format t " ")
       (print-real-or-run-time (/ (value :run-time-us) 1000000 time-unit)
                               (/ (sqrt (uncertainty :run-time-us))
@@ -520,7 +521,7 @@
                 (format t " ~5F"
                         (if geometricp
                             d
-                            (/ d +ns+ *time-unit*))))))
+                            (/ (* d +ns+) *time-unit*))))))
         (terpri)))))
 
 #+nil

@@ -3,12 +3,7 @@
 ;;;; - Even with interleaving, there is some unexplained variance
 ;;;;   left.
 ;;;;
-;;;; - Outliers? Real/CPU anomalies? It's impossible to detect
-;;;;   outliers without modelling the source.
-;;;;
 ;;;; - Why is MAX-RSE based on real time?
-;;;;
-;;;; - Skewed distribution
 ;;;;
 ;;;; - Add parallel option (as opposed to interleaved)?
 ;;;;
@@ -18,8 +13,6 @@
 ;;;; - Rerun a subset of benchmarks based on a previous run (e.g.
 ;;;;   where the biggest differences were)
 ;;;;
-;;;; - Track statistics with outliers too?
-;;;;
 ;;;; - Document
 ;;;;
 ;;;; - How to handle failures in benchmarks?
@@ -27,8 +20,6 @@
 ;;;; - Timeouts
 ;;;;
 ;;;; - Better estimate measurement overhead
-;;;;
-;;;; - Differential timing? (https://www.youtube.com/watch?v=vrfYLlR8X8k&t=914s)
 ;;;;
 ;;;; - DEFTESTlike macro?
 ;;;;
@@ -76,9 +67,11 @@
   (alexandria:shuffle (alexandria:iota n)))
 
 
-;;;; KLUDGE: Redefine SB-SYS::GET-SYSTEM-INFO (used by
-;;;; SB-EXT:CALL-WITH-TIMING below) with SB-UNIX:RUSAGE_CHILDREN
-;;;; instead of SB-UNIX:RUSAGE_SELF.
+;;;; KLUDGE: When started from the command line, redefine
+;;;; SB-SYS::GET-SYSTEM-INFO (used by SB-EXT:CALL-WITH-TIMING below)
+;;;; with SB-UNIX:RUSAGE_CHILDREN instead of SB-UNIX:RUSAGE_SELF. It's
+;;;; all a secondary concern, though, because for real time we rely on
+;;;; clock_gettime() for high-resolution timing.
 
 (defmacro without-redefinition-warnings (&body body)
   #+sbcl
@@ -92,18 +85,17 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (sb-ext:unlock-package :sb-sys))
 
-(without-redefinition-warnings
-  sb-sys::
-  (defun get-system-info ()
-    (multiple-value-bind
-          (err? utime stime maxrss ixrss idrss isrss minflt majflt)
-        ;; FIXME: This should sometimes be sb-unix:rusage_self or
-        ;; thread.
-        (sb-unix:unix-getrusage sb-unix:rusage_children)
-      (declare (ignore maxrss ixrss idrss isrss minflt))
-      (unless err?       ; FIXME: nonmnemonic (reversed) name for ERR?
-        (error "Unix system call getrusage failed: ~A." (strerror utime)))
-      (values utime stime majflt))))
+(defun redefine-get-system-info ()
+  (without-redefinition-warnings
+    sb-sys::
+    (defun get-system-info ()
+      (multiple-value-bind
+            (err? utime stime maxrss ixrss idrss isrss minflt majflt)
+          (sb-unix:unix-getrusage sb-unix:rusage_children)
+        (declare (ignore maxrss ixrss idrss isrss minflt))
+        (unless err?     ; FIXME: nonmnemonic (reversed) name for ERR?
+          (error "Unix system call getrusage failed: ~A." (strerror utime)))
+        (values utime stime majflt)))))
 
 
 ;;;; Timing
@@ -679,6 +671,7 @@
 #+nil (parse-arguments '("a" "b" "c"))
 
 (defun deltist ()
+  (redefine-get-system-info)
   (handler-case
       (multiple-value-bind (options commands)
           (parse-arguments (rest sb-ext:*posix-argv*))

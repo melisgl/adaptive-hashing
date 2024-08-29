@@ -102,7 +102,9 @@
 
 ;;;; Timing
 
-;;; One nanosecond in seconds
+;;; One milli-, micro- and nanosecond in seconds
+(defconstant +ms+ (expt 10 -3))
+(defconstant +us+ (expt 10 -6))
 (defconstant +ns+ (expt 10 -9))
 
 ;;; Add :RUN-TIME-US to PLIST to make it a TIMING. PLIST is the
@@ -112,10 +114,8 @@
 (defun %make-timing (&rest plist)
   (let ((plist (copy-list plist)))
     (setf (getf plist :run-time-us)
-          (cons (+ (timing-value plist :user-run-time-us)
-                   (timing-value plist :system-run-time-us))
-                (+ (timing-uncertainty plist :user-run-time-us)
-                   (timing-uncertainty plist :system-run-time-us))))
+          (+ (timing-value plist :user-run-time-us)
+             (timing-value plist :system-run-time-us)))
     plist))
 
 ;;; FIXME: hard coded
@@ -149,10 +149,9 @@
   (let ((x (if (functionp key)
                (funcall key timing)
                (getf timing key))))
-    (or (if (consp x)
-            (car x)
-            x)
-        0)))
+    (if (consp x)
+        (car x)
+        x)))
 
 ;;; This is the variance of the measurement (0 by default). Currently
 ;;; only used when multiple timings are averaged and their sample
@@ -169,10 +168,16 @@
 (defparameter *log-kludge* 1d-20)
 
 (defun log-timing (timing)
-  (loop for (key value) on timing by #'cddr
-        append (list key (if (numberp value)
-                             (log (+ value *log-kludge*))
-                             value))))
+  (list* :logp t
+         (loop for (key value) on timing by #'cddr
+               append (list key (cond ((numberp value)
+                                       (log (+ value *log-kludge*)))
+                                      ((consp value)
+                                       ;; Translating variance to the log
+                                       ;; domain is underspecified.
+                                       (assert nil))
+                                      (t
+                                       value))))))
 
 (defun timings-mean (timings key)
   (let ((sum 0)
@@ -207,9 +212,12 @@
 (defun mean-timing (timings)
   (let ((keys (loop for rest on (first timings) by #'cddr
                     collect (first rest))))
-    (loop for key in keys
-          append (list key (cons (timings-mean timings key)
-                                 (timings-variance-of-mean timings key))))))
+    (list* :logp (timing-value (first timings) :logp)
+           (loop for key in keys
+                 unless (eq key :logp)
+                   append (list key (cons (timings-mean timings key)
+                                          (timings-variance-of-mean timings
+                                                                    key)))))))
 
 (defvar *time-unit* 1)
 
@@ -224,36 +232,38 @@
           *print-timing-gc*))
 
 (defun print-timing (timing &key (time-unit *time-unit*))
-  (flet ((value (key)
-           (timing-value timing key))
-         (uncertainty (key)
-           (timing-uncertainty timing key))
-         (print-real-or-run-time (mean stddev)
-           (format t "~7,3F" mean)
-           (if (/= stddev 0)
-               (format t " ~6,2F% ~7,3F"
-                       ;; Relative Standard Error (stddev of our
-                       ;; estimate of the mean)
-                       (if (zerop mean)
-                           0
-                           (* 100 (/ stddev mean)))
-                       ;; Biased sample stddev
-                       stddev)
-               (format t "                "))))
-    (print-real-or-run-time (/ (* (value :real-time-ns) +ns+) time-unit)
-                            (/ (* (sqrt (uncertainty :real-time-ns)) +ns+)
-                               time-unit))
+  (labels ((value (key)
+             (timing-value timing key))
+           (uncertainty (key)
+             (timing-uncertainty timing key))
+           (print-real-or-run-time (mean stddev)
+             (format t "~7,3F" mean)
+             (if (/= stddev 0)
+                 (format t " ~6,2F% ~7,3F"
+                         ;; Relative Standard Error (stddev of our
+                         ;; estimate of the mean)
+                         (if (zerop mean)
+                             0
+                             (* 100 (/ stddev (abs mean))))
+                         ;; Biased sample stddev
+                         stddev)
+                 (format t "                ")))
+           (scale (x a)
+             (if (value :logp)
+                 (+ x (log a))
+                 (* x a))))
+    (print-real-or-run-time (scale (value :real-time-ns) (/ +ns+ time-unit))
+                            (sqrt (uncertainty :real-time-ns)))
     (format t " ")
-    (print-real-or-run-time (/ (value :run-time-us) 1000000 time-unit)
-                            (/ (sqrt (uncertainty :run-time-us))
-                               1000000 time-unit))
+    (print-real-or-run-time (scale (value :run-time-us) (/ +us+ time-unit))
+                            (sqrt (uncertainty :run-time-us)))
     (format t " (~7,3F + ~7,3F~@[, ~7,3F~])~%"
-            (/ (value :user-run-time-us) 1000000 time-unit)
-            (/ (value :system-run-time-us) 1000000 time-unit)
+            (scale (value :user-run-time-us) (/ +us+ time-unit))
+            (scale (value :system-run-time-us) (/ +us+ time-unit))
             (and *print-timing-gc*
                  ;; FIXME: :GC-REAL-TIME-MS?
                  (getf timing :gc-run-time-ms)
-                 (/ (value :gc-run-time-ms) 1000 time-unit)))))
+                 (scale (value :gc-run-time-ms) (/ +ms+ time-unit))))))
 
 
 ;;;; Commands
@@ -430,7 +440,9 @@
 #+nil
 (estimate-run-times (list (lambda () (sleep (+ 0.075 (random 0.05))))
                           (lambda () (sleep (+ 0.175 (random 0.05)))))
-                    :estimator :delta)
+                    :estimator :delta
+                    :runs 100
+                    :time-unit 0.1)
 #+nil
 (estimate-run-times (list (lambda () (sleep (+ 0.075 (random 0.05))))
                           (lambda () (sleep (+ 0.175 (random 0.05)))))

@@ -485,13 +485,13 @@
          (command-timings/skip (when skipp
                                  (make-array n-commands :initial-element ())))
          (n-skipped 0)
-         (*print-timing-gc* measure-gc))
+         (*print-timing-gc* measure-gc)
+         (*time-unit* time-unit))
     (flet ((print-command-totals (command-timings)
              (loop for i below n-commands
                    do (format t "~A ~A " (if geometricp "geom" "arit")
                               (command-name command-names i))
-                      (print-timing (mean-timing (aref command-timings i))
-                                    :time-unit time-unit))))
+                      (print-timing (mean-timing (aref command-timings i))))))
       (loop for benchmark in benchmarks
             do (assert (= (length (benchmark-commands benchmark)) n-commands)))
       (loop

@@ -518,7 +518,7 @@
          (n-skipped 0)
          (*print-timing-gc* measure-gc)
          (*time-unit* time-unit))
-    (flet ((print-command-totals (command-timings)
+    (flet ((print-command-averages (command-timings)
              (loop for i below n-commands
                    do (format t "~A ~A " (if geometricp "geom" "arit")
                               (command-name command-names i))
@@ -545,19 +545,20 @@
                         (push timing (aref command-timings i)))
                       (when skipp
                         (push timing (aref command-timings/skip i))))
-             ;; Print totals without skipped
-             (format t "~%Totals after benchmark ~S" (1+ benchmark-index))
+             ;; Print average without skipped
+             (format t "~%Average after benchmark ~S" (1+ benchmark-index))
              (when (plusp n-skipped)
                (format t " (excluding ~S skipped)"  n-skipped))
              (terpri)
              (print-heading nil :logp geometricp)
-             (print-command-totals command-timings)
-             ;; Print totals with skipped if any
+             (print-command-averages command-timings)
+             ;; Print averages with skipped if any
              (when (plusp n-skipped)
-               (format t "~%Totals after benchmark ~S (including ~S skipped)~%"
+               (format t "~%Averages after benchmark ~S ~
+                          (including ~S skipped)~%"
                        (1+ benchmark-index) n-skipped)
                (print-heading nil :logp geometricp)
-               (print-command-totals command-timings/skip)))))))
+               (print-command-averages command-timings/skip)))))))
 
 #+nil
 (time-sequentially `((:commands ,(list (lambda () (sleep 0.1))

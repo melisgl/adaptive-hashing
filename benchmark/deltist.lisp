@@ -234,41 +234,60 @@
 
 (defvar *print-timing-gc* nil)
 
-(defun print-heading (serial-no &optional marker)
+(defun print-heading (serial-no &key marker logp)
   (if serial-no
       (format t "~A~3D" marker serial-no)
       (format t "    "))
-  (format t " cmd    real  stddev     cpu  stddev ~
+  (if logp
+      (format t " cmd    real  stddev     cpu  stddev ~
              (   user +     sys~:[~;,      gc~])~%"
-          *print-timing-gc*))
+              *print-timing-gc*)
+      (format t " cmd    real  +-rse%     cpu  +-rse% ~
+             (   user +     sys~:[~;,      gc~])~%"
+              *print-timing-gc*)))
 
 (defun print-timing (timing &key (time-unit *time-unit*))
-  (labels ((value (key)
-             (timing-value timing key))
-           (uncertainty (key)
-             (timing-uncertainty timing key))
-           (print-real-or-run-time (mean stddev)
-             (format t "~7,3F" mean)
-             (if (/= stddev 0)
-                 ;; Biased sample stddev
-                 (format t " ~7,3F" stddev)
-                 (format t "        ")))
-           (scale (x a)
-             (if (value :logp)
-                 (+ x (log a))
-                 (* x a))))
-    (print-real-or-run-time (scale (value :real-time-ns) (/ +ns+ time-unit))
-                            (sqrt (uncertainty :real-time-ns)))
-    (format t " ")
-    (print-real-or-run-time (scale (value :run-time-us) (/ +us+ time-unit))
-                            (sqrt (uncertainty :run-time-us)))
-    (format t " (~7,3F + ~7,3F~@[, ~7,3F~])~%"
-            (scale (value :user-run-time-us) (/ +us+ time-unit))
-            (scale (value :system-run-time-us) (/ +us+ time-unit))
-            (and *print-timing-gc*
-                 ;; FIXME: :GC-REAL-TIME-MS?
-                 (getf timing :gc-run-time-ms)
-                 (scale (value :gc-run-time-ms) (/ +ms+ time-unit))))))
+  (let ((logp (timing-value timing :logp)))
+    (labels ((value (key)
+               (timing-value timing key))
+             (uncertainty (key)
+               (timing-uncertainty timing key))
+             (print-time (key unit)
+               (let ((mean (scale (value key) (/ unit time-unit))))
+                 (format t "~7,3F" mean)))
+             (print-stddev (key)
+               (let ((stddev (sqrt (uncertainty key))))
+                 (if (/= stddev 0)
+                     ;; Biased sample stddev
+                     (format t " ~7,3F" stddev)
+                     (format t "        "))))
+             (print-rse% (key unit)
+               (let ((mean (scale (value key) (/ unit time-unit)))
+                     (stddev (scale (sqrt (uncertainty key))
+                                    (/ unit time-unit))))
+                 (if (/= mean 0)
+                     (format t " ~6,3F%" (* 100 (/ stddev (abs mean))))
+                     (format t "        "))))
+             (scale (x a)
+               (if logp
+                   (+ x (log a))
+                   (* x a))))
+      (print-time :real-time-ns +ns+)
+      (if logp
+          (print-stddev :real-time-ns)
+          (print-rse% :real-time-ns +ns+))
+      (format t " ")
+      (print-time :run-time-us +us+)
+      (if logp
+          (print-stddev :run-time-us)
+          (print-rse% :run-time-us +us+))
+      (format t " (~7,3F + ~7,3F~@[, ~7,3F~])~%"
+              (scale (value :user-run-time-us) (/ +us+ time-unit))
+              (scale (value :system-run-time-us) (/ +us+ time-unit))
+              (and *print-timing-gc*
+                   ;; FIXME: :GC-REAL-TIME-MS?
+                   (getf timing :gc-run-time-ms)
+                   (scale (value :gc-run-time-ms) (/ +ms+ time-unit)))))))
 
 
 ;;;; Commands
@@ -349,7 +368,7 @@
         (format t "~%Warming up~%")
         (loop for run below warmup do
           (terpri)
-          (print-heading (1+ run) "B")
+          (print-heading (1+ run) :marker "B" :logp geometricp)
           (loop for i in (random-permutation n-commands)
                 do (print-command-name i :shuffled)
                    (with-timing #'print-timing
@@ -364,9 +383,10 @@
               (return))
             (when printp
               (terpri)
-              (print-heading (1+ min-n-runs) (ecase estimator
-                                               ((:delta) "D")
-                                               ((:beta) "B"))))
+              (print-heading (1+ min-n-runs) :marker (ecase estimator
+                                                       ((:delta) "D")
+                                                       ((:beta) "B"))
+                                             :logp geometricp))
             (ecase estimator
               ((:delta) (run-delta-batch n-commands #'min-n-runs #'timer))
               ((:beta) (run-beta-batch n-commands #'timer)))
@@ -530,13 +550,13 @@
              (when (plusp n-skipped)
                (format t " (excluding ~S skipped)"  n-skipped))
              (terpri)
-             (print-heading nil)
+             (print-heading nil :logp geometricp)
              (print-command-totals command-timings)
              ;; Print totals with skipped if any
              (when (plusp n-skipped)
                (format t "~%Totals after benchmark ~S (including ~S skipped)~%"
                        (1+ benchmark-index) n-skipped)
-               (print-heading nil)
+               (print-heading nil :logp geometricp)
                (print-command-totals command-timings/skip)))))))
 
 #+nil

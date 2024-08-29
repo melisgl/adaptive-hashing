@@ -1,8 +1,5 @@
 ;;;; TODO
 ;;;;
-;;;; - Even with interleaving, there is some unexplained variance
-;;;;   left.
-;;;;
 ;;;; - Use CLOCK_PROCESS_CPUTIME_ID?
 ;;;;
 ;;;; - Stddev is not very useful for the geometric avarage line. It
@@ -168,35 +165,27 @@
              (cdr x))
         0)))
 
-;;; FIXME: What is this for?
-(defun timing-n-measurements (timing)
-  (getf timing :n-measurements 1))
-
 ;;; 0s is measured sometimes ...
 (defparameter *log-kludge* 1d-20)
 
-(defun maybe-log (x logp)
-  (cond ((not logp) x)
-        ((minusp x)
-         (assert nil))
-        (t (log (+ x *log-kludge*)))))
+(defun log-timing (timing)
+  (loop for (key value) on timing by #'cddr
+        append (list key (if (numberp value)
+                             (log (+ value *log-kludge*))
+                             value))))
 
-(defun maybe-exp (x logp)
-  (if logp (exp x) x))
-
-(defun timings-mean (timings key geometricp)
+(defun timings-mean (timings key)
   (let ((sum 0)
         (n (length timings)))
     (map nil (lambda (timing)
-               (incf sum (maybe-log (timing-value timing key) geometricp)))
+               (incf sum (timing-value timing key)))
          timings)
-    (maybe-exp (if (zerop n)
-                   0
-                   (/ sum n))
-               geometricp)))
+    (if (zerop n)
+        0
+        (/ sum n))))
 
 (defun timings-variance-of-mean (timings key)
-  (let ((mean (timings-mean timings key nil))
+  (let ((mean (timings-mean timings key))
         (sum 0)
         (sum-variances 0))
     (map nil (lambda (timing)
@@ -215,11 +204,11 @@
 ;;; Return a timing whose TIMING-VALUEs are the estimated means of
 ;;; TIMINGS, and whose TIMING-UNCERTAINTYs are the estimated variance
 ;;; of that mean.
-(defun mean-timing (timings geometricp)
+(defun mean-timing (timings)
   (let ((keys (loop for rest on (first timings) by #'cddr
                     collect (first rest))))
     (loop for key in keys
-          append (list key (cons (timings-mean timings key geometricp)
+          append (list key (cons (timings-mean timings key)
                                  (timings-variance-of-mean timings key))))))
 
 (defvar *time-unit* 1)
@@ -327,14 +316,18 @@
              (loop for timings across timings
                    minimizing (length timings)))
            (timer (i kind)
-             (print-command-name command-names i kind)
+             (when printp
+               (print-command-name command-names i kind))
              (let ((fn (elt fns i)))
                (with-timing (lambda (timing)
-                              (when printp
-                                (print-timing timing))
-                              (push timing (aref timings i))
-                              (when prev
-                                (push timing (aref timings-after prev i))))
+                              (let ((timing (if geometricp
+                                                (log-timing timing)
+                                                timing)))
+                                (when printp
+                                  (print-timing timing))
+                                (push timing (aref timings i))
+                                (when prev
+                                  (push timing (aref timings-after prev i)))))
                  fn))
              (setq prev i)))
       (when (plusp warmup)
@@ -370,13 +363,13 @@
                                                    :geometric-mean
                                                    :arithmetric-mean)
                                              (length timings))
-                         (print-timing (mean-timing timings geometricp))))
+                         (print-timing (mean-timing timings))))
               (check-assumption timings timings-after :real-time-ns geometricp
                                 command-names))))))
     (format t "~%Total runs: ~D~%" (loop for timings across timings
                                          sum (length timings)))
     (map 'list (lambda (timings)
-                 (mean-timing timings geometricp))
+                 (mean-timing timings))
          timings)))
 
 (defun check-assumption (timings timings-after key geometricp command-names)
@@ -401,11 +394,8 @@
                 (if (or (zerop (length (aref ta i j)))
                         (zerop (length (aref tac i j))))
                     nil
-                    (if geometricp
-                        (- (log (timings-mean (aref ta i j) key t))
-                           (log (timings-mean (aref tac i j) key t)))
-                        (- (timings-mean (aref ta i j) key nil)
-                           (timings-mean (aref tac i j) key nil)))))))
+                    (- (timings-mean (aref ta i j) key)
+                       (timings-mean (aref tac i j) key))))))
       (dotimes (i n)
         (format t "prev=~A: " (command-name command-names i))
         (dotimes (j n)
@@ -494,8 +484,7 @@
              (loop for i below n-commands
                    do (format t "~A ~A " (if geometricp "geom" "arit")
                               (command-name command-names i))
-                      (print-timing (mean-timing (aref command-timings i)
-                                                 geometricp)
+                      (print-timing (mean-timing (aref command-timings i))
                                     :time-unit time-unit))))
       (loop for benchmark in benchmarks
             do (assert (= (length (benchmark-commands benchmark)) n-commands)))
@@ -634,7 +623,8 @@
                                        :command-names command-names
                                        :estimator estimator
                                        :warmup warmup :runs runs
-                                       :measure-gc nil :geometricp geometricp
+                                       :measure-gc nil
+                                       :geometricp geometricp
                                        :time-unit time-unit)))
             (when commands
               (time-it commands))

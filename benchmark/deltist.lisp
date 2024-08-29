@@ -191,16 +191,12 @@
 
 (defun timings-variance-of-mean (timings key)
   (let ((mean (timings-mean timings key))
-        (sum 0)
-        (sum-variances 0))
+        (sum 0))
     (map nil (lambda (timing)
                (let ((x (timing-value timing key)))
-                 (incf sum (expt (- x mean) 2))
-                 (incf sum-variances (timing-uncertainty timing key))))
+                 (incf sum (expt (- x mean) 2))))
          timings)
-    (/ (+ (/ sum (length timings))
-          sum-variances)
-       (length timings))))
+    (/ sum (length timings))))
 
 (defun timing-rse (timing)
   (/ (sqrt (timing-uncertainty timing :real-time-ns))
@@ -218,6 +214,21 @@
                    append (list key (cons (timings-mean timings key)
                                           (timings-variance-of-mean timings
                                                                     key)))))))
+
+(defun timings-average-uncertainy (timings key)
+  (/ (loop for timing in timings
+           sum (timing-uncertainty timing key))
+     (length timings)))
+
+(defun average-timings (timings)
+  (let ((keys (loop for rest on (first timings) by #'cddr
+                    collect (first rest))))
+    (list* :logp (timing-value (first timings) :logp)
+           (loop for key in keys
+                 unless (eq key :logp)
+                   append (list key (cons (timings-mean timings key)
+                                          (timings-average-uncertainy timings
+                                                                      key)))))))
 
 (defvar *time-unit* 1)
 
@@ -491,7 +502,8 @@
              (loop for i below n-commands
                    do (format t "~A ~A " (if geometricp "geom" "arit")
                               (command-name command-names i))
-                      (print-timing (mean-timing (aref command-timings i))))))
+                      (print-timing (average-timings
+                                     (aref command-timings i))))))
       (loop for benchmark in benchmarks
             do (assert (= (length (benchmark-commands benchmark)) n-commands)))
       (loop

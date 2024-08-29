@@ -227,7 +227,7 @@
   (if serial-no
       (format t "~A~3D" marker serial-no)
       (format t "    "))
-  (format t " cmd    real  +-rse%  stddev     cpu  +-rse%  stddev ~
+  (format t " cmd    real  stddev     cpu  stddev ~
              (   user +     sys~:[~;,      gc~])~%"
           *print-timing-gc*))
 
@@ -239,15 +239,9 @@
            (print-real-or-run-time (mean stddev)
              (format t "~7,3F" mean)
              (if (/= stddev 0)
-                 (format t " ~6,2F% ~7,3F"
-                         ;; Relative Standard Error (stddev of our
-                         ;; estimate of the mean)
-                         (if (zerop mean)
-                             0
-                             (* 100 (/ stddev (abs mean))))
-                         ;; Biased sample stddev
-                         stddev)
-                 (format t "                ")))
+                 ;; Biased sample stddev
+                 (format t " ~7,3F" stddev)
+                 (format t "        ")))
            (scale (x a)
              (if (value :logp)
                  (+ x (log a))

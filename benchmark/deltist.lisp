@@ -288,6 +288,23 @@
                    ;; FIXME: :GC-REAL-TIME-MS?
                    (getf timing :gc-run-time-ms)
                    (scale (value :gc-run-time-ms) (/ +ms+ time-unit)))))))
+
+(defun print-ratios (command-names means)
+  (format t "Estimated real time of command ROW / command COL in percents:~%")
+  (loop for i upfrom 0
+        for mean-1 in means
+        do (format t "~A: " (command-name command-names i))
+           (loop for mean-2 in means
+                 do (print-ratio mean-1 mean-2))
+           (terpri)))
+
+(defun print-ratio (mean-1 mean-2)
+  (let* ((logp (timing-value mean-1 :logp))
+         (mean-1 (timing-value mean-1 :real-time-ns))
+         (mean-2 (timing-value mean-2 :real-time-ns)))
+    (format t " ~7,3F%" (* 100 (1- (if logp
+                                       (exp (- mean-1 mean-2))
+                                       (/ mean-1 mean-2)))))))
 
 
 ;;;; Commands
@@ -401,11 +418,13 @@
                          (print-timing (mean-timing timings))))
               (check-assumption timings timings-after :real-time-ns geometricp
                                 command-names))))))
-    (format t "~%Total runs: ~D~%" (loop for timings across timings
+    (format t "~%Total runs: ~D~%~%" (loop for timings across timings
                                          sum (length timings)))
-    (map 'list (lambda (timings)
-                 (mean-timing timings))
-         timings)))
+    (let ((means (map 'list (lambda (timings)
+                              (mean-timing timings))
+                      timings)))
+      (print-ratios command-names means)
+      means)))
 
 (defun check-assumption (timings timings-after key geometricp command-names)
   ;; Assuming order (AREF TIMINGS-AFTER I J), where I is the previous,

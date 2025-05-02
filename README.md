@@ -6,10 +6,16 @@ https://zenodo.org/doi/10.5281/zenodo.10991321.
 
 ## Summary
 
-Hash functions must and can adapt to the actual keys in the
-hash table for best performance in practice.
+In a nutshell, hash functions must and can adapt to the actual keys in
+the hash table for best performance in practice. The [blog post]
+(https://quotenil.com/adaptive-hashing.html) expands on that just a
+bit. One step up from the blog post is the talk, and then it's the
+full paper, both linked below.
 
 ## Files
+
+- [talk/](talk/) has the LaTeX sources of a 30 minute presentation
+  ([talk/talk.pdf](talk/talk.pdf)).
 
 - [paper/](paper/) contains the LaTeX sources of the paper
   ([paper/paper.pdf](paper/paper.pdf)).
@@ -17,6 +23,3 @@ hash table for best performance in practice.
 - [benchmark/](benchmark/) has the instructions and some messy scripts
   to reproduce the results from the paper (copied from
   https://github.com/melisgl/sbcl/tree/adaptive-hash).
-
-- [talk/](talk/) has the LaTeX sources of a 30 minute presentation
-  ([talk/talk.pdf](talk/talk.pdf)).

@@ -232,13 +232,13 @@ densely dashdotted,every mark/.append style={solid, fill=gray},mark=diamond*\\%
 
 \maketitle
 
-\abstract{Hash tables are ubiquitous, and the choice of hash function, which maps a key to a bucket, is key for their performance.
+\abstract{Hash tables are ubiquitous, and the choice of hash function, which maps a key to a bucket, is key to their performance.
 We argue that the predominant approach of fixing the hash function for the lifetime of the hash table is suboptimal and propose adapting it to the current set of keys.
 In the prevailing view, good hash functions spread the keys ``randomly'' and are fast to evaluate.
 General-purpose ones (e.g. Murmur) are designed to do both while remaining agnostic to the distribution of the keys, which limits their bucketing ability and wastes computation.
 When these shortcomings are recognized, the user of the hash table may specify a hash function more tailored to the expected key distribution, but doing so almost always introduces an unbounded risk in case their assumptions do not bear out in practice.
 At the other, fully key-aware end of the spectrum, Perfect Hashing algorithms can discover hash functions to bucket a given set of keys optimally, but they are costly to run and require the keys to be known and fixed ahead of time.
-Our main conceptual contribution is that adapting the hash table's hash function to the keys online is necessary for the best performance as
+Our main conceptual contribution is that adapting the hash table's hash function to the keys online is necessary for the best performance, as
 adaptivity allows for better bucketing of keys \emph{and} faster hash functions.
 We instantiate the idea of online adaptation with minimal overhead and no change to the hash table API.
 The experiments show that the adaptive approach marries the common-case performance of weak hash functions with the robustness of general-purpose ones.}
@@ -260,7 +260,7 @@ For example, \Citet{hentschel2022entropy} claimed in 2022 that ``a typical compl
 At that scale, even small gains in this area can have huge impact.
 This work aims to provide a general framework to improve the performance of hash tables in practice.
 Theory mostly concerns itself with the unknown key distribution setting and the cost of key lookup abstracted as the number of key comparisons required.
-This approach is highly successful due to its wide applicability and being a reasonable model \emph{asymptotically} for a certain class of hash functions.
+This approach is highly successful due to its wide applicability and for being a reasonable model \emph{asymptotically} for a certain class of hash functions.
 However, practice stubbornly happens in the non-asymptotic regime with particular keys on computers with memory caches.
 We propose a method to equip hash tables with the ability to change their hash function based on the keys being added to improve their overall performance by bucketing the keys more evenly, making the hash function faster or more cache-friendly.
 We are not aware of a cost model that incorporates these effects and is amenable to theoretical analysis, hence this work tilts heavily towards Experimental Algorithmics \citep{moret1999towards}.
@@ -576,12 +576,12 @@ The more fundamental problem is that max-chain-length is a really loose indicato
 \subsection{Experiments with List Keys}
 \label{sec:experiments-with-list-keys}
 
-The solution used in the string case also works for lists with a small modification, which is another common type of key in \lisp{equal} hash tables.
+With a small modification, the solution used in the string case also works for lists, which is another common type of key in \lisp{equal} hash tables.
 Since lists are not random-access, we only consider their prefixes (unlike \Cref{alg:string-hash}, which also includes suffixes of strings).
 At least since the year 2000, stock SBCL has truncated list keys to length 4 to avoid stack exhaustion in case its recursive hashing algorithm is invoked on a circular key.
 This value might have been chosen empirically to maximize performance, or user code has adapted to this limitation even if the root cause of the issue remained unrecognized, or both.
 Regardless, we found that a default limit of 4 worked best.
-From this default, the limit is increased as collisions warrant, as in the string case.
+From this default, the limit is increased as collisions warrant, similar to the string case.
 So, the practical gains for the adaptive method may be limited to cases where crucial bits in keys are put unknowingly beyond length 4.
 Curiously, there are two such cases in SBCL's own test suite (\texttt{\small arith-combinations.pure.lisp} and \texttt{\small save4.test.sh}), which experience a disastrous number of collisions and are sped up by 60\% when the adaptation mechanism increases the truncation length.
 
@@ -593,7 +593,7 @@ Curiously, there are two such cases in SBCL's own test suite (\texttt{\small ari
 
 In the previous section, we showed an example of how to reduce the complexity of the hash without increasing the number of collisions too much.
 In this section, we instantiate the general idea of adaptive hashing on the problem of hashing integer and pointer keys \citep{integerhashing}.
-In this case, we will consider reducing the number of collisions at the same time as speeding up the hash function, requiring more than a passing familiarity with the key distribution.
+In this case, we will consider reducing the number of collisions at the same time as speeding up the hash function, which requires leveraging the underlying key distribution.
 
 \subsection{Perfect Hashing on Arithmetic Sequences}
 \label{sec:arithmetic-sequences}
@@ -622,7 +622,7 @@ SBCL, a Common Lisp implementation with a moving garbage collector (GC), has two
 Under such allocators, if the keys are of the same size and are allocated in a tight loop, we can expect their addresses to roughly follow an arithmetic progression.
 But only roughly because with TCMalloc there may be holes (that belonged to previously freed objects) on the page, which may be filled in a more irregular pattern, and when a page is full, the new page may be anywhere in memory.
 With SBCL, pages have no holes because allocation within a page is simply a pointer bump\footnote{The address of the next object is the address of the previously allocated object plus its size aligned to a double word boundary.} and because the GC compacts.
-When there is not enough room left on the current page or GC happens, the allocator gets a new page, but the addresses of subsequent pages are much less regular than the address within pages.
+When there is not enough room left on the current page or GC happens, the allocator gets a new page, but the addresses of subsequent pages are much less regular than the addresses within pages.
 A further complication with SBCL is that there are no separate pages for objects of different sizes, so if objects of non-constant sizes are allocated between subsequent keys, that throws regularity off and may reduce the density of addresses of keys within the page.
 
 In summary, to the extent that addresses of keys are distributed following arithmetic progressions, their hashes can be improved.
@@ -707,7 +707,7 @@ To avoid degenerating to $k \rightarrow 2 k \gg \mathrm{PB}$ at $s=\mathrm{PB}$,
 
 \subsection{The Constant Hash}
 
-The hash functions discussed up to now are adaptive as they all involve the shift $s$ detected from the keys.
+The hash functions discussed up to now are adaptive, as they all involve the shift $s$ detected from the keys.
 A different kind of adaptation, based on the number of keys but ignoring their values is also possible.
 We mirror the common practice of starting with an array plus linear search and switching to a hash table above a predefined, small number of keys but hide it behind the hash table API and utilize it when the comparison function is extremely light as is the case with integer / pointer hashing.
 This may also be viewed as a \emph{Constant} hash with a specialized implementation or a hash table with only one bucket.
@@ -1102,7 +1102,7 @@ However, in contrast to our work, VIP hashing leaves the hash function itself co
 \Citet{hentschel2022entropy} propose to learn the hash function offline from samples of the key distribution by using the most informative parts of compound keys.
 Our case study on string keys in \Cref{sec:half-an-example} can be seen as an online version of their method, with the expensive learning phase removed.
 
-In the taxonomy of \citet{chi2017hashing}, adaptive hashing falls under data-dependent hashing although they assume that the training is performed offline.
+In the taxonomy of \citet{chi2017hashing}, adaptive hashing falls under data-dependent hashing although they assume that training is performed offline.
 The adaptive hashing method can also be viewed as a more robust, key-aware version of user-defined hash functions, which are also adapted offline to a particular key distribution.
 
 There is a history of handcrafted hash functions that perform well in common cases, but exhibit spectacular failures in others.
@@ -1116,7 +1116,7 @@ This hardcoded limit made hashing faster, but as it could lead to lots of collis
 We have laid out the case for adaptive hash functions, which reside between key-agnostic and perfect hashes.
 Our primary contribution lies in reconceptualizing hash tables as inherently adaptive data structures, which can marry the theoretical guarantees of universal hashing with the common-case performance of weak hash functions.
 To validate this approach, we implemented the adaptive framework and demonstrated improved performance as well as robustness on string and integer/pointer hashing by capturing real-life key patterns and providing efficient search algorithms.
-The design space opened up by the adaptive hashing framework is large, and the adaptation mechanisms investigated in this work hardly cover a substantial or particularly imaginative part of it, leaving ample room for further developments.
+The design space afforded by the adaptive hashing framework is large, and the adaptation mechanisms investigated in this work hardly cover a substantial or particularly imaginative part of it, leaving ample room for further developments.
 In particular, the max-chain-length mechanism can form the basis of a defense against denial-of-service collision attacks without constraining the choice of hash function \citep{aumasson2012siphash}.
 
 Finally, the source code of the SBCL changes and the benchmarking code to reproduce the experimental results are open-sourced and available at \url{https://github.com/melisgl/sbcl/tree/adaptive-hash}.

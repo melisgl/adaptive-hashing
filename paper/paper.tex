@@ -245,7 +245,7 @@ Hash tables are ubiquitous, and the choice of hash function, which maps a key to
 We argue that the predominant approach of fixing the hash function for the lifetime of the hash table is suboptimal and propose adapting it to the current set of keys.
 In the prevailing view, good hash functions spread the keys ``randomly'' and are fast to evaluate.
 General-purpose ones (e.g. Murmur) are designed to do both while remaining agnostic to the distribution of the keys, which limits their bucketing ability and wastes computation.
-When these shortcomings are recognised, the user of the hash table may specify a hash function more tailored to the expected key distribution, but doing so almost always introduces an unbounded risk in case their assumptions do not bear out in practice.
+When these shortcomings are recognized, the user of the hash table may specify a hash function more tailored to the expected key distribution, but doing so almost always introduces an unbounded risk in case their assumptions do not bear out in practice.
 At the other, fully key-aware end of the spectrum, Perfect Hashing algorithms can discover hash functions to bucket a given set of keys optimally, but they are costly to run and require the keys to be known and fixed ahead of time.
 Our main conceptual contribution is that adapting the hash table's hash function to the keys online is necessary for the best performance as
 adaptivity allows for better bucketing of keys \emph{and} faster hash functions.
@@ -271,39 +271,41 @@ We propose a method to equip hash tables with the ability to change their hash f
 We are not aware of a cost model that incorporates these effects and is amenable to theoretical analysis, hence this work tilts heavily towards Experimental Algorithmics \citep{moret1999towards}.
 
 \begin{algorithm}[t]
-  \caption{\small Sketch of a possible adaptation mechanism implemented in $\mathit{put}$ with low overhead. The unchanged parts of a usual $\mathit{put}$ implementation are \textcolor{gray!100}{grayed out}. The hash function may be adapted when there are too many keys in the same bucket, or when rehashing finds that the number of collisions is too high. Alternatively, the total cost of access (\Cref{def:cost-of-hashes}) could be tracked, requiring an additional write to memory and also a performance penalty to key deletion.}
+  \caption{\small Sketch of a possible adaptation mechanism implemented in $\mathit{put}$ with low overhead.
+The unchanged parts of a simple $\mathit{put}$ implementation are \textcolor{gray!100}{grayed out}.
+The hash function \emph{hash\_fn} may be adapted when there are too many keys in the same bucket, or when rehashing finds that the number of collisions is too high.
+Alternatively, the total cost of access (\Cref{def:cost-of-hashes}) could be tracked, requiring an additional write to memory and also a performance penalty to key deletion.}
   \label{alg:puthash}
   \begin{algorithmic}[1]
     \color{gray!100}
     \Function{$\operatorname{put}$}{$\mathit{key}$, $\mathit{value}$}
-      \Let{$\mathit{bucket}$}{$\operatorname{hash}(\mathit{key}) \bmod m$}
-      \color{mglred}
+      \Let{$\mathit{bucket}$}{$\operatorname{hash\_fn}(\mathit{key}) \bmod m$}
+      \color{black}
       \Let{$\mathit{chain\_length}$}{$0$}
       \color{gray!100}
       \For{$k$ $\gets$ next key in $\mathit{bucket}$}
-        \If{(hashes are not cached) or $\operatorname{cached\_hash}(k) = h$}
-          \If{$\operatorname{compare}(\mathit{key}, k)$}
-            \Let{value of $k$}{$\mathit{value}$}
-            \State\Return
-          \EndIf
+        \If{$\operatorname{compare}(\mathit{key}, k)$}
+          \Let{value of $k$}{$\mathit{value}$}
+          \State\Return
         \EndIf
-        \color{mglred}
+        \color{black}
         \Let{$\mathit{chain\_length}$}{$\mathit{chain\_length} + 1$}
         \color{gray!100}
       \EndFor
-      \color{mglred}
+      \color{black}
       \If{$\mathit{chain\_length}$ too high}
-        \Let{$h$}{$\operatorname{safer\_hash\_function}(h)$}
-        \Let{$\mathit{bucket}$}{$\operatorname{hash}(\mathit{key}) \bmod m$}
+        \Let{$\operatorname{hash\_fn}$}{$\operatorname{safer\_hash\_function}(\operatorname{hash\_fn})$}
+        \State{$\operatorname{rehash\_and\_maybe\_adapt}()$}
+        \Let{$\mathit{bucket}$}{$\operatorname{hash\_fn}(\mathit{key}) \bmod m$}
       \EndIf
       \color{gray!100}
-      \If{hash tabel is full}
+      \If{hash table is full}
         \State{double $m$ and increase storage}
-        \color{mglred}
+        \color{black}
         \State{$\textcolor{gray}{%
-            \operatorname{\textcolor{mglred}{adapt\_and\_}rehash}()}$}
-        \If{hash function was changed}
-          \Let{$\mathit{bucket}$}{$\operatorname{hash}(\mathit{key}) \bmod m$}
+            \operatorname{rehash\textcolor{black}{\_and\_maybe\_adapt}}()}$}
+        \If{$\operatorname{hash\_fn}$ was changed}
+          \Let{$\mathit{bucket}$}{$\operatorname{hash\_fn}(\mathit{key}) \bmod m$}
         \EndIf
         \color{gray!100}
       \EndIf
@@ -323,7 +325,7 @@ Here, we propose hiding some of the selection cost in rehashing, when the hash t
 In summary, our main contributions are:
 \begin{itemize}
 \item On the conceptual level, we argue that hash functions must be able to change during the lifetime of a hash table for best performance.
-\item We propose light-weight adaptation mechanism tailored to string and integer/pointer hashing.
+\item We propose a light-weight adaptation mechanism tailored to string and integer/pointer hashing.
 \item We empirically demonstrate performance gains in a real-life hash table implementation.\footnote{
 The proposed algorithms were implemented within SBCL \citep{newman1999sbcl}, a high-quality Common Lisp.
 SBCL hash tables are reasonably fast given the constraints of the ANSI standard \citep{steele1990common} but not close to the state of the art.
@@ -334,8 +336,9 @@ We microoptimized the baseline SBCL v2.4.2 to make performance comparisons faire
 %% In \Cref{sec:the-case-for-adaptive-hashing}, we argue that the hash functions in common use are suboptimal in terms of collisions because they ignore the actual distribution of keys.
 %% Then, in \Cref{sec:half-an-example}, we demonstrate on string hashing how much there is to gain by adapting the hash function to the data even if the number of collisions is not reduced.
 %% Finally, \Cref{sec:pointer-keys} provides an example with integer/pointer keys of how to achieve fewer collisions with faster hash functions in a robust solution.
-To ground the exposition, \Cref{alg:puthash} sketches the implementation of the high-level part of a possible adaptation mechanism.
+To ground the exposition, \Cref{alg:puthash} sketches the implementation of a possible adaptation mechanism.
 In later sections, we flesh out this skeletal algorithm.
+
 
 \section{The Case for Adaptive Hashing}
 \label{sec:the-case-for-adaptive-hashing}
@@ -346,7 +349,7 @@ In this section, we present the traditional cost model for lookup in hash tables
 %% If multiple keys are assigned to the same bucket, then a lookup must perform a trivial search with expected cost that's linear in the number keys in the bucket.
 
 We denote the number of buckets with $m$, the number of keys with $n$, the keys (assumed to be integers) with $k$, hash values with $h \in \natnumzero$, buckets with $b \in [0,m-1]$, and say that hash $h$ falls into bucket $b$ if $h \bmod m = b$.
-We often refer to vectors of certain sizes, e.g. of hashes, with notation like $h_{1:n}$.
+We write $h_{1:n}$ to refer to a vector of a certain size.
 
 \begin{definition}[Bucket Count]
 For a given set of hash values $h_{1:n}$ and $m$ buckets, we denote the bucket count vector with $c(h_{1:n}, m) \in (\natnumzero)^m$, where $c(h_{1:n}, m)_b = \vert\{i \colon i \in [1, n], h_i \bmod m = b\}\vert$ is the number of hashes falling into bucket $b$, for all $b \in [0,m-1]$.
@@ -361,7 +364,7 @@ The cost of hashes $h_{1:n}$ with $m$ buckets is $C(c) = n^{-1} \sum_{b=0}^{m-1}
 \end{definition}
 \noindent Note that this definition differs from \emph{hash function quality} in the Dragon Book \citep{dragonbook} only in the normalization.
 
-We define perfect hashes as those that fill all buckets as equally as possibile.
+We define perfect hashes as those that fill all buckets as equally as possible.
 This generalizes the classic definition \citep{fredman1984storing}, which requires no collisions, to the space-restricted setting of $m<n$.
 \begin{definition}[Perfect Hash]
 We say the hashes $h_{1:n}$ are perfectly distributed in $m$ buckets if $m - (n \bmod m)$ buckets have $\floor{n/m}$ hashes in them, and $n \bmod m$ buckets have $\floor{n/m} + 1$ hashes in them.
@@ -430,14 +433,14 @@ It may be worth improving, especially if the hash function can be made faster at
       \Let{$h$}{$\operatorname{len}(s)$}
       \Comment{Initialize the hash to the length}
       \Let{$a, b$}{$0, \operatorname{len}(s)-1$}
-      \Let{$n$}{$\min(\mathit{limit}, l)$}
-      \While{$a < (n \gg -1)$}
+      \Let{$n$}{$\min(\mathit{limit}, h)$}
+      \While{$a < (n \gg 1)$}
         \State{$h \gets \operatorname{add\_char}(h, s[a])$}
         \State{$h \gets \operatorname{add\_char}(h, s[b])$}
         \State{$a, b \gets a+1, b-1$}
       \EndWhile
       \If{$n \bmod 2 = 1$}
-        \Comment{Add the odd middle character}
+        \Comment{Add the odd middle char}
         \State{$h \gets \operatorname{add\_char}(h, s[a])$}
       \EndIf
       \State\Return{$h$}
@@ -544,8 +547,8 @@ Note the log scales. The plot shows the \emph{average} time for inserting a new 
 \label{fig:string-existing-get}
 \end{sourcefigure}
 
-If after this rehash, the number of collisions is significantly higher than would be expected with the uniform hash, then we double the limit again and rehash.
-This procedure repeats until there are no more keys with truncated hashes\footnote{We use the highest bit in the hash to indicate truncation.} or the number of collisions falls near the expected level (see \Cref{sec:number-of-collisions}).
+If there are significantly more collisions after this rehash than would be expected with the uniform hash, then we double the limit again and rehash.
+This procedure repeats until the number of collisions falls near the expected level (see \Cref{sec:number-of-collisions} for the details of our approximation) or there are no more keys with truncated hashes\footnote{We use the highest bit in the hash to indicate truncation.}.
 
 \subsection{Experiments with String Keys}
 \label{sec:experiments-with-string-keys}
@@ -572,7 +575,7 @@ The more fundamental problem is that max-chain-length is a really loose indicato
 The solution used in the string case also works for lists with a small modification, which is another common type of key in \lisp{equal} hash tables.
 Since lists are not random-access, we only consider their prefixes (unlike \Cref{alg:string-hash}, which also includes suffixes of strings).
 At least since the year 2000, stock SBCL has truncated list keys to length 4 to avoid stack exhaustion in case its recursive hashing algorithm is invoked on a circular key.
-This value might have been chosen empirically to maximize performance, or user code has adapted to this limitation even if the root cause of the issue remained unrecognised, or both.
+This value might have been chosen empirically to maximize performance, or user code has adapted to this limitation even if the root cause of the issue remained unrecognized, or both.
 Regardless, we found that a default limit of 4 worked best.
 From this default, the limit is increased as collisions warrant, as in the string case.
 So, the practical gains for the adaptive method may be limited to cases where crucial bits in keys are put unknowingly beyond length 4.
@@ -593,7 +596,7 @@ In this case, we will consider reducing the number of collisions at the same tim
 
 First, we consider the idealized case of adding keys to a power-of-2 hash table from an arithmetic sequence of integers in order.
 Let $a_i = a_0 + id$ for all $i \in [1, \dots]$, where $a_0$ is the offset and $d$ is difference between successive elements.
-a perfect hash here is $h_i = \floor{a_i/d} = h_0 + i$, but this requires division by an arbitrary constant $d$, which is slow on current hardware.
+A perfect hash here is $h_i = \floor{a_i/d} = h_0 + i$, but this requires division by an arbitrary constant $d$, which is slow on current hardware.
 
 Since the number of buckets $m$ is a power of 2, as long as $d$ is odd, any finite progression in $a$ will be perfectly distributed modulo $m$ because $d$ and $m$ are coprime.
 Let $s$ be the largest integer such that $2^s \mid d$.
@@ -618,7 +621,7 @@ With SBCL, pages have no holes because allocation within a page is simply a poin
 When there is not enough room left on the current page or GC happens, the allocator gets a new page, but the addresses of subsequent pages are much less regular than the address within pages.
 A further complication with SBCL is that there are no separate pages for objects of different sizes, so if objects of non-constant sizes are allocated between subsequent keys, that throws regularity off and may reduce the density of addresses of keys within the page.
 
-In summary, to the extent that addresses of keys are distributed like elements of pure arithmetic progressions, their hashes can be improved.
+In summary, to the extent that addresses of keys are distributed following arithmetic progressions, their hashes can be improved.
 We leverage the following properties:
 \begin{itemize}
 \item \textbf{denseness}: many keys are allocated on the same page,
@@ -628,7 +631,7 @@ We leverage the following properties:
 \subsection{Detecting Common Power-of-2 Factors}
 
 We need to detect $s$ in the factor $2^s$ common to all keys fast and safely.
-Fast because this will be done at runtime, and safely because using an overestimation of $s$ in e.g. the Arithmetic hash $k \rightarrow k \gg s$ can discard valuable bits and lead to a disastrous number of collisions, which must then be detected and corrected by the another change to the hash function (see \Cref{alg:puthash} and \Cref{alg:rehash-eq}).
+Fast because this will be done at runtime, and safely because using an overestimation of $s$ in e.g. the Arithmetic hash $k \rightarrow k \gg s$ can discard valuable bits and lead to a disastrous number of collisions, which must then be detected and corrected by another change to the hash function (see \Cref{alg:puthash} and \Cref{alg:rehash-eq}).
 
 \Cref{alg:detect-shift} is designed to fulfil these requirements.
 It is extremely light, performing about 2 bitwise assembly instructions per key, over only a subset of keys to limit memory access.
@@ -683,8 +686,7 @@ Then, the expected cost of the Pointer-Mix hash function is
 \end{align*}
 \end{restatable}
 \noindent See \Cref{sec:proofs} for the proof.
-
-This cost is upper bounded by that of the uniform hash (\Cref{prop:expected-cost-of-uh}), $1+\frac{n-1}{2m}$, and we can see that with a few densely packed pages, we can get reasonable improvements, which diminish quickly with more pages and sparsity.
+This cost is upper-bounded by that of the uniform hash (\Cref{prop:expected-cost-of-uh}), $1+\frac{n-1}{2m}$, and we can see that with a few densely packed pages, we can get reasonable improvements, which diminish quickly with more pages and sparsity.
 Meanwhile, at the single-page extreme ($u=n\leqslant m$), Pointer-Mix is a perfect hash.
 
 \subsection{The Pointer-Shift Hash}
@@ -700,9 +702,9 @@ To avoid degenerating to $k \rightarrow 2 k \gg \mathrm{PB}$ at $s=\mathrm{PB}$,
 \subsection{The Constant Hash}
 
 The hash functions discussed up to now are adaptive as they all involve the shift $s$ detected from the keys.
-A different kind of adaptation, based the number of keys but ignoring their values is also possible.
+A different kind of adaptation, based on the number of keys but ignoring their values is also possible.
 We mirror the common practice of starting with an array plus linear search and switching to a hash table above a predefined, small number of keys but hide it behind the hash table API and utilize it when the comparison function is extremely light as is the case with integer / pointer hashing.
-This may also be viewed as as a \emph{Constant} hash with a specialized implementation or a hash table with only one bucket.
+This may also be viewed as a \emph{Constant} hash with a specialized implementation or a hash table with only one bucket.
 
 \subsection{Other Hashes}
 
@@ -710,7 +712,7 @@ Stock SBCL comes with the \emph{Prefuzz} hash function, which was designed by ha
 Naturally, Prefuzz takes advantage of the memory allocation patterns to make common use-cases fast (e.g. \lisp{symbol} keys, frequently used in the compiler), but it does so at the expense of extreme penalties to others.
 
 The \emph{Murmur3} mixer function is a fast, widely used, general-purpose, non-cryptographic hash function with strong mixing properties.
-Its bucket distribution is very close that of the uniform hash.
+Its bucket distribution is very close to that of the uniform hash.
 
 \begin{algorithm}[t]
   \caption{\small Adapting the hash function in \lisp{eq} (i.e. object identity based) hash tables at rehash.
@@ -719,15 +721,15 @@ We refer to this algorithm as Co+PS>Pr>Mu when comparing minor variations.}
   \label{alg:rehash-eq}
   \begin{algorithmic}[1]
     \Require{Integer/pointer keys $k_i (i \in [1, \dots, n])$, doubled number of buckets $m$, current hash function $h$.}
-    \Procedure{$\operatorname{adapt\_and\_rehash\_eq}$}{}
+    \Procedure{$\operatorname{rehash\_and\_maybe\_adapt\_eq}$}{}
       \If{h = constant\_hash}
         \If{m = 64}
-          \Let{$s$}{$\operatorname{count\_common\_prefix\_bits}(\textrm{k}_{1:10}$)}
+          \Let{$s$}{$\operatorname{count\_common\_prefix\_bits}(k_{1:16}$)}
           \Let{$h$}{$\operatorname{pointer\_shift}$}
         \EndIf
       \EndIf
       \If{$h = \operatorname{pointer\_shift}$}
-        \Let{$\mathit{n\_collisions}$}{$\operatorname{rehash}(m, h, \mathit{count\_collisions=True})$}
+        \Let{$\mathit{n\_collisions}$}{$\operatorname{rehash}(m, h, \mathit{count=True})$}
         \If{$\mathit{n\_collisions}$ is too many}
           \Let{$h$}{$\operatorname{prefuzz}$}
         \EndIf
@@ -736,7 +738,7 @@ We refer to this algorithm as Co+PS>Pr>Mu when comparing minor variations.}
         \If{$m < 2048$}
           \State{$\operatorname{rehash}(m, h)$}
         \Else
-          \Let{$\mathit{n\_collisions}$}{$\operatorname{rehash}(m, h, \mathit{count\_collisions=True})$}
+          \Let{$\mathit{n\_collisions}$}{$\operatorname{rehash}(m, h, \mathit{count=True})$}
           \If{$\mathit{n\_collisions}$ is too many}
             \Let{$h$}{$\operatorname{murmur3}$}
           \EndIf
@@ -753,16 +755,16 @@ We refer to this algorithm as Co+PS>Pr>Mu when comparing minor variations.}
 \label{sec:choosing-the-hash-function}
 
 We implemented the above hash functions in SBCL and modified its hash table implementation to perform adaptation with pointers and integers.
-So, we use Common Lisp's \lisp{eq} hash tables, whose comparison function is based on object identity (i.e. it compares the address of non-immediate objects, or the value of immediate objects such as integers that fit into a machine word) similarly to the \texttt{==} operator in Java.
+So, we use Common Lisp's \lisp{eq} hash tables, whose comparison function is based on object identity (i.e. addresses of non-immediate objects or the values of immediate objects such as integers that fit into a machine word) similarly to the \texttt{==} operator in Java.
 
 The adaptation mechanism for \lisp{eq} hash tables (\Cref{alg:rehash-eq}) fleshes out \Cref{alg:puthash} and works as follows.
-Hash tables are initialized with the Constant hash, which remains in effect until the number of keys exceeds 32.
-At that point, $\mathit{count\_common\_prefix\_bits}$ determines the shift $s$ to use, and we switch to the Pointer-Shift hash function.
+Hash tables are initialized with the Constant hash.
+When the number of keys exceeds 32, $\mathit{count\_common\_prefix\_bits}$ determines the shift $s$ to use, and we switch to the Pointer-Shift hash function.
 Whenever rehash finds that there are significantly more collisions than would be expected with a uniform hash (see \Cref{sec:number-of-collisions}), the hash table switches to Prefuzz.
 
 We also need to fall back on Murmur3 in case Prefuzz produces too many collisions.
 However, because Prefuzz is somewhat robust and considerably faster than Murmur3, we count collisions only at larger sizes to reduce the adaptation overhead\footnote{The overhead is that of incrementing a single counter if the bucket in \lisp{index-vector} is not zero, which is a hard to predict branch for the CPU.} and otherwise rely on the max-chain-length mechanism from \Cref{alg:puthash} to fall back on the next safer hash function (in the order they appear in $adapt\_and\_rehash\_eq$ in \Cref{alg:rehash-eq}) if the key being inserted falls into a bucket with at least 14 other keys\footnote{With a uniform hash, the probability of the maximum chain length being at most 14 is higher than 99\% for all possible hash table sizes.}.
-Using the tighther limit from \Cref{sec:half-an-example} would be too costly for \lisp{eq} hashing.
+Using the tighter limit from \Cref{sec:half-an-example} would be too costly for \lisp{eq} hashing.
 See \Cref{sec:implementation-details} for the more details.
 
 \begin{sourcefigure}[t]
@@ -1033,10 +1035,9 @@ This is still an overall win based just on the numbers presented here except in 
 However, an even larger unquantified benefit is in the reduced memory usage and garbage collection times due to the Constant hash having a specialized single vector implementation.
 
 In summary, a general-purpose hash such as Murmur is a safe but suboptimal choice for many common situations in \lisp{eq} hash tables.
-SBCL's own Prefuzz hash is hand-crafted for these common situations, on which it is difficult to beat.
+SBCL's own Prefuzz hash is hand-crafted for these common situations, where it is difficult to beat.
 Still, because it is non-adaptive, it sacrifices performance in other cases and has terrible worst-case behaviour.
-Our adaptive approach combines the worst-case safety of Murmur with the common case performance of Prefuzz.
-The adaptive approach even manages to slightly outperform Prefuzz because having the reliable safety net of the fallback mechanism allows it to be more aggressive in catering to the common case.
+The adaptive approach combines the worst-case safety of Murmur with the common-case performance of Prefuzz, and it even manages to slightly outperform Prefuzz because having the reliable safety net of the fallback mechanism allows it to be more aggressive in catering to the common case.
 
 \subsection{Macrobenchmarks}
 \label{sec:macrobenchmarks}
@@ -1073,7 +1074,7 @@ However, it requires more memory than plain hash tables, so it is not a drop-in 
 Cuckoo hashing also has worst-case constant lookup time but with a lower memory footprint.
 In a sequential implementation, it requires $1.5$ hash function evaluations and memory accesses on average per lookup, which is about what the uniform hash has at load factor 1 (see \Cref{prop:expected-cost-of-uh}).
 
-\Citet{rabbithashing,iwrotehtefastesthashtable} use the maximum probe length to decide when to grow the hash table or reseed the hash function but, unlike our adaptive method, they do not change its functional form, nor do they select the hash function to fit a given set of keys (see \Cref{alg:detect-shift}).
+Although Rabbit Hashing \citep{rabbithashing} and the hash table by \citet{iwrotehtefastesthashtable} utilize maximum probe length to determine when to resize or reseed, unlike our adaptive method, they stop short of modifying the functional form of the hash, nor do they tailor it to fit a specific set of keys.
 
 VIP hashing \citep{kakaraparthy2022vip} moves the more frequently accessed keys earlier in the collision chains to reduce the average lookup cost.
 Since adapting to the key access distribution is performed online, this method also needs to take extreme care to minimize overhead.
@@ -1088,7 +1089,7 @@ The adaptive hashing method can also be viewed as a more robust, key-aware versi
 There is a history of handcrafted hash functions that perform well in common cases, but exhibit spectacular failures in others.
 As we have seen, Prefuzz in SBCL is one such example.
 Java used to hash only about 1/8 of the characters in long strings \citep{jdkstringhashsubsampling}.
-This hardcoded limit made hashing faster, but as it could lead to lots of collisions without no fallback mechanism to save it, from JDK 1.2 on, all characters are hashed.
+This hardcoded limit made hashing faster, but as it could lead to lots of collisions with no fallback mechanism to save it, from JDK 1.2 on, all characters are hashed.
 
 
 \section{Conclusion}
@@ -1225,12 +1226,11 @@ Then, from $\E \frac{u}{m} \leqslant \exp(-f)$, we have that
 Since this upper bound is already quite loose at most load factors, we use $c > (n \gg 1)$ to test for too many collisions at small hash table sizes.
 
 
-
 \section{SBCL Hash Tables}
 \label{sec:sbcl-hash-tables}
 
 SBCL hash tables are technically separate-chaining, meaning that there are explicit chains of keys which fall into the same bucket.
-Ironically for a Lisp, these chains are not lists: for performance reasons, they are represented by two arrays of indices, called the \lisp{index-vector} and the \lisp{next-vector}), which are only resized when the hash table grows.
+Ironically for a Lisp, these chains are not lists: for performance reasons, they are represented by two arrays of indices, called the \lisp{index-vector} and the \lisp{next-vector}, which are only resized when the hash table grows.
 The main pieces fit together as follows:
 \begin{itemize}
 \item The vector \lisp{pairs} holds alternating keys and values in a stable order, which is important for iteration (e.g. \lisp{maphash}).
@@ -1279,7 +1279,6 @@ cpupower -c 3 idle-set -D 0
 The benchmarking process was run at maximum priority (\texttt{nice -n -20}), pinned to a single CPU (\texttt{taskset -c 3}).
 
 
-
 \section{Microbenchmarking Methodology}
 \label{sec:microbenchmarking-methodology}
 
@@ -1323,7 +1322,7 @@ SBCL had a 16GB heap.
   \label{tab:load-system-results}
   \centering
   \begin{tabular}{@{}lrrrr@{}}
-                   & Real time    & $\pm$RSE\% &     CPU time & $\pm$RSE\% \\
+                   & Real    & $\pm$RSE\% &     CPU & $\pm$RSE\% \\
 Pr                 & 24.068  &     0.02\% &  24.037 &     0.02\% \\
 Mu                 & 24.152  &     0.01\% &  24.117 &     0.01\% \\
 Co+Pr              & 23.976  &     0.03\% &  23.945 &     0.02\% \\
@@ -1347,7 +1346,7 @@ In the third, SBCL tests were run with file-by-file with \texttt{tests/run-tests
   \label{tab:test-system-results}
   \centering
   \begin{tabular}{@{}lrrrr@{}}
-                   & Real time   & $\pm$RSE\% & CPU time & $\pm$RSE\% \\
+                   & Real    & $\pm$RSE\% & CPU     & $\pm$RSE\% \\
 Pr                 & 25.512  &     0.03\% &  24.493 &     0.02\% \\
 Mu                 & 25.632  &     0.05\% &  24.632 &     0.04\% \\
 Co+Pr              & 25.367  &     0.03\% &  24.352 &     0.02\% \\
@@ -1363,14 +1362,14 @@ Equal*             & 25.257  &     0.03\% &  24.256 &     0.02\%
   \label{tab:sbcl-tests-results}
   \centering
   \begin{tabular}{@{}lrrrr@{}}
-                   & Real time & $\pm$RSE\% & CPU time & $\pm$RSE\% \\
-Pr                 & 582.164 &  0.02\% & 452.344 &  0.03\% \\
-Mu                 & 582.858 &  0.02\% & 453.069 &  0.02\% \\
-Co+Pr              & 580.071 &  0.02\% & 450.294 &  0.03\% \\
-Co+Mu              & 579.448 &  0.02\% & 449.644 &  0.03\% \\
-Co+Pr>Mu           & 578.909 &  0.02\% & 449.035 &  0.02\% \\
-Co+PS>Pr>Mu        & 578.207 &  0.02\% & 448.392 &  0.03\% \\
-Equal*             & 568.890 &  0.02\% & 439.091 &  0.02\%
+                   & Real    & $\pm$RSE\% & CPU     & $\pm$RSE\% \\
+Pr                 & 582.16 &     0.02\% & 452.34 &  0.03\% \\
+Mu                 & 582.85 &     0.02\% & 453.06 &  0.02\% \\
+Co+Pr              & 580.07 &     0.02\% & 450.29 &  0.03\% \\
+Co+Mu              & 579.44 &     0.02\% & 449.64 &  0.03\% \\
+Co+Pr>Mu           & 578.90 &     0.02\% & 449.03 &  0.02\% \\
+Co+PS>Pr>Mu        & 578.20 &     0.02\% & 448.39 &  0.03\% \\
+Equal*             & 568.89 &     0.02\% & 439.09 &  0.02\%
   \end{tabular}
 \end{table}
 
@@ -2032,7 +2031,7 @@ Adaptive keeps its edge.}
 \label{sec:results-for-cons-rnd-6}
 
 Like the \texttt{FIXNUM} \texttt{:RND 6}, but keys are \lisp{cons} objects with a random number of conses allocated between them.
-There is no explicit random offset is here; we rely on the addresses assigned by the memory allocator.
+There is no explicit random offset here; we rely on the addresses assigned by the memory allocator.
 To prevent the garbage collector from compacting memory regions holding these objects in memory, the skipped over conses are kept alive.
 
 In all experiments, there is some unexplained weirdness at large sizes, which affects all hashes except Murmur.
@@ -2422,7 +2421,7 @@ The advantage of Co+Pr and Adaptive over Prefuzz comes almost exclusively from t
 
     \pgfplotstableread{data/symbol-existing-flat-safe-small.tbl}{\sorted}
     \addplot[adaptivehash] table [x=nkeys, y=delns] {\sorted};
-    \addlegendentry{\textbf{\textbf{Adaptive}}};
+    \addlegendentry{\textbf{Adaptive}};
   \end{axis}
 \end{tikzpicture}
 \caption{DEL timings with \texttt{SYMBOL} \texttt{:EXISTING}}

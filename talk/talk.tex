@@ -841,6 +841,7 @@ Three low-overhead triggers for adaptation in $\fn{put}()$:
       \color{mglred2}
       \If{$\var{chain\_length}$ too high}
         \Let{$h$}{$\fn{safer\_hash\_function}(h)$}
+        \Let{$h$}{$\fn{rehash\_and\_adapt}(h, m)$}
         \Let{$\var{bucket}$}{$h(\var{key}) \bmod m$}
       \EndIf
       \color{gray!100}
@@ -849,7 +850,7 @@ Three low-overhead triggers for adaptation in $\fn{put}()$:
         \State{double $m$ and increase storage}
         \color{mglred2}
         \Let{$h$}{$\textcolor{gray}{%
-            \fn{\textcolor{mglred2}{adapt\_and\_}rehash}(h, m)}$}
+            \fn{rehash\textcolor{mglred2}{\_and\_adapt}}(h, m)}$}
         \If{$h$ was changed}
           \Let{$\var{bucket}$}{$h(\var{key}) \bmod m$}
         \EndIf

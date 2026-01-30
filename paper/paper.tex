@@ -1217,7 +1217,11 @@ As the first three plots in \Cref{fig:collision-bounds} show, this asymptotic fo
 \begin{figure}[t]
 \begin{tikzpicture}
   \begin{axis}[xmin=0, xmax=1, ymax=1, xlabel=load factor $f$,
-      ylabel=proportion of empty buckets]
+      ylabel=proportion of empty buckets,
+      height=0.75*\linewidth,
+      width=0.98\linewidth,
+      legend columns=2,
+      legend pos=south west]
     \addplot[mglred, thick, domain=0:1] {0.875^(8*x)};
     \addlegendentry{$m=8$};
     \addplot[orange, dashed, thick, domain=0:1] {0.9375^(16*x)};
@@ -1343,13 +1347,15 @@ In particular, we take at least 3 measurements, then continue until the total nu
   \centering
   \begin{tabular}{@{}lrrrr@{}}
                    & Real    & $\pm$RSE\% &     CPU & $\pm$RSE\% \\
+\midrule
 Pr                 & 24.068  &     0.02\% &  24.037 &     0.02\% \\
 Mu                 & 24.152  &     0.01\% &  24.117 &     0.01\% \\
 Co+Pr              & 23.976  &     0.03\% &  23.945 &     0.02\% \\
 Co+Mu              & 23.979  &     0.03\% &  23.943 &     0.03\% \\
 Co+Pr>Mu           & 23.988  &     0.02\% &  23.955 &     0.02\% \\
 Co+PS>Pr>Mu        & 23.951  &     0.02\% &  23.918 &     0.01\% \\
-Equal*             & 23.824  &     0.02\% &  23.792 &     0.02\%
+Equal*             & 23.824  &     0.02\% &  23.792 &     0.02\% \\
+\midrule
   \end{tabular}
 \end{table}
 
@@ -1359,13 +1365,15 @@ Equal*             & 23.824  &     0.02\% &  23.792 &     0.02\%
   \centering
   \begin{tabular}{@{}lrrrr@{}}
                    & Real    & $\pm$RSE\% & CPU     & $\pm$RSE\% \\
+\midrule
 Pr                 & 25.512  &     0.03\% &  24.493 &     0.02\% \\
 Mu                 & 25.632  &     0.05\% &  24.632 &     0.04\% \\
 Co+Pr              & 25.367  &     0.03\% &  24.352 &     0.02\% \\
 Co+Mu              & 25.360  &     0.04\% &  24.342 &     0.03\% \\
 Co+Pr>Mu           & 25.385  &     0.04\% &  24.367 &     0.03\% \\
 Co+PS>Pr>Mu        & 25.372  &     0.03\% &  24.374 &     0.02\% \\
-Equal*             & 25.257  &     0.03\% &  24.256 &     0.02\%
+Equal*             & 25.257  &     0.03\% &  24.256 &     0.02\% \\
+\midrule
   \end{tabular}
 \end{table}
 
@@ -1389,13 +1397,15 @@ In the third, SBCL tests were run with file-by-file with \texttt{tests/run-tests
   \centering
   \begin{tabular}{@{}lrrrr@{}}
                    & Real    & $\pm$RSE\% & CPU     & $\pm$RSE\% \\
+\midrule
 Pr                 & 582.16 &     0.02\% & 452.34 &  0.03\% \\
 Mu                 & 582.85 &     0.02\% & 453.06 &  0.02\% \\
 Co+Pr              & 580.07 &     0.02\% & 450.29 &  0.03\% \\
 Co+Mu              & 579.44 &     0.02\% & 449.64 &  0.03\% \\
 Co+Pr>Mu           & 578.90 &     0.02\% & 449.03 &  0.02\% \\
 Co+PS>Pr>Mu        & 578.20 &     0.02\% & 448.39 &  0.03\% \\
-Equal*             & 568.89 &     0.02\% & 439.09 &  0.02\%
+Equal*             & 568.89 &     0.02\% & 439.09 &  0.02\% \\
+\midrule
   \end{tabular}
 \end{table}
 

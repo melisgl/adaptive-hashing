@@ -1,58 +1,5 @@
-%https://tex.stackexchange.com/questions/177025/hyperref-cleveref-and-algpseudocode-same-identifier-warning
-\PassOptionsToPackage{hypertexnames=false}{hyperref}
-
-\documentclass[sigconf]{acmart}
-
-%% \BibTeX command to typeset BibTeX logo in the docs
-\AtBeginDocument{%
-  \providecommand\BibTeX{{%
-    Bib\TeX}}}
-
-%% Rights management information.  This information is sent to you
-%% when you complete the rights form.  These commands have SAMPLE
-%% values in them; it is your responsibility as an author to replace
-%% the commands and values with those provided to you when you
-%% complete the rights form.
-\setcopyright{rightsretained}
-\copyrightyear{2024}
-\acmYear{2024}
-\acmDOI{10.5281/zenodo.10991322}
-
-%% These commands are for a PROCEEDINGS abstract or paper.
-\acmConference[ELS'24]{The 24th European Lisp Symposium}{May 06--07, 2024}{%
-  Vienna, Austria}
-%%
-%%  Uncomment \acmBooktitle if the title of the proceedings is different
-%%  from ``Proceedings of ...''!
-%%
-%%\acmBooktitle{Woodstock '18: ACM Symposium on Neural Gaze Detection,
-%%  June 03--05, 2018, Woodstock, NY}
-%% \acmISBN{978-1-4503-XXXX-X/18/06}
-
-%% Submission ID.
-%% Use this when submitting an article to a sponsored event. You'll
-%% receive a unique submission ID from the organizers
-%% of the event, and this ID should be used as the parameter to this command.
-%%\acmSubmissionID{123-A56-BU3}
-
-\begin{CCSXML}
-<ccs2012>
-<concept>
-<concept_id>10003752.10003809.10010031</concept_id>
-<concept_desc>Theory of computation~Data structures design and analysis</concept_desc>
-<concept_significance>500</concept_significance>
-</concept>
-<concept>
-<concept_id>10002951.10003152.10003161.10003162.10003412</concept_id>
-<concept_desc>Information systems~Hashed file organization</concept_desc>
-<concept_significance>500</concept_significance>
-</concept>
-</ccs2012>
-\end{CCSXML}
-
-\ccsdesc[500]{Theory of computation~Data structures design and analysis}
-\ccsdesc[500]{Information systems~Hashed file organization}
-
+\documentclass[twocolumn]{article}
+\usepackage{mglgrid}
 
 \usepackage{scalerel}[2016/12/29]
 \usepackage{stackengine}
@@ -68,15 +15,11 @@
 \usepackage{thmtools}
 \usepackage{thm-restate}
 %% \usepackage{bm}
-\usepackage{algorithm}
-\usepackage[noend]{algpseudocode}
-\usepackage{algorithmicx}
-\newcommand*\Let[2]{\State #1 $\gets$ #2}
-\algdef{SE}[DOWHILE]{Do}{doWhile}{\algorithmicdo}[1]{\algorithmicwhile\ #1}%
-\usepackage[capitalise]{cleveref}
+\usepackage{balance}
 
 \newcommand*\lisp[1]{\texttt{#1}}
 
+\allowdisplaybreaks
 \let\leq\leqslant
 \let\geq\geqslant
 \renewcommand{\neg}{\protect\hstretch{0.8}{-}}
@@ -137,6 +80,35 @@
 \definecolor{mglblue}{RGB}{65,48,163}
 
 
+%%%% Floats
+
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{algorithm}
+%% This upsets the grounding:
+%% \floatstyle{ruled}
+%% \restylefloat{algorithm}
+
+%% Fixed-width table columns
+%https://tex.stackexchange.com/a/12712
+\usepackage{array}
+\newcolumntype{L}[1]{>{\raggedright\let\newline\\\arraybackslash
+    \hspace{0pt}}m{#1}}
+\newcolumntype{C}[1]{>{\centering\let\newline\\\arraybackslash
+    \hspace{0pt}}m{#1}}
+\newcolumntype{R}[1]{>{\raggedleft\let\newline\\\arraybackslash
+    \hspace{0pt}}m{#1}}
+
+%%% Captions
+
+\usepackage{caption}
+%% The small font helps separate captions from the body.
+\captionsetup{font=small}
+\captionsetup[figure]{belowskip=0\groundskip,aboveskip=0.5\groundskip}
+\captionsetup[table]{belowskip=0\groundskip,aboveskip=0.5\groundskip}
+\captionsetup[algorithm]{belowskip=0\groundskip,aboveskip=0.5\groundskip}
+
+
 %%%% Tikz and Pgfplots
 
 \usepackage{tikz}
@@ -146,6 +118,7 @@
 \usetikzlibrary{external}
 \tikzexternalize[prefix=tikz/]
 %% \tikzset{external/optimize command away=\AddToShipoutPictureBG}
+%% \newcommand\tikzpicturedependsonfile[1]{}
 
 %https://tex.stackexchange.com/questions/84127/correctly-align-vertical-text-on-a-baseline-in-pgfplots
 \def\mystrut{\vphantom{hg}}
@@ -229,29 +202,37 @@ densely dashdotted,every mark/.append style={solid, fill=gray},mark=diamond*\\%
 }
 
 
-%% Repeating figures
-%%https://tex.stackexchange.com/questions/225052/using-a-figure-again-in-document
+%%%% Hyperref likes to be loaded late, but some others want to be
+%%%% loaded after hyperref.
 
-\usepackage{environ}
+\usepackage[hidelinks,linktoc=all]{hyperref}
+\usepackage{hypcap}
+\usepackage{bookmark}
+\usepackage[nameinlink]{cleveref}
+%% algpseudocode must be after cleveref else we get warnings like
+%% "destination with the same identifier (name{ALG@line.1}) has been
+%% already used, duplicate ignored".
+\usepackage[noend]{algpseudocode}
+\usepackage{algorithmicx}
+\newcommand*\Let[2]{\State #1 $\gets$ #2}
+\algdef{SE}[DOWHILE]{Do}{doWhile}{\algorithmicdo}[1]{\algorithmicwhile\ #1}%
+
 
+%%%% Titlepage info
+
+\title{Adaptive Hashing}
+\subtitle{Faster Hash Functions with Fewer Collisions*}
+
+\author{\authorname{G\'abor Melis}\\
+  \authoremail{melisgl@google}.\authoremail{com}\\
+  \authororg{Google DeepMind}}
 
 
 \begin{document}
 
-\title{Adaptive Hashing}
-\subtitle{Faster Hash Functions with Fewer Collisions}
-\subtitlenote{\dots Especially in Certain Situations}
+\maketitle
 
-\author{Gábor Melis}
-\email{melisgl@google.com}
-\affiliation{%
-  \institution{Google DeepMind}
-  \city{London}
-  \country{United Kingdom}
-}
-
-\begin{abstract}
-Hash tables are ubiquitous, and the choice of hash function, which maps a key to a bucket, is key for their performance.
+\abstract{Hash tables are ubiquitous, and the choice of hash function, which maps a key to a bucket, is key for their performance.
 We argue that the predominant approach of fixing the hash function for the lifetime of the hash table is suboptimal and propose adapting it to the current set of keys.
 In the prevailing view, good hash functions spread the keys ``randomly'' and are fast to evaluate.
 General-purpose ones (e.g. Murmur) are designed to do both while remaining agnostic to the distribution of the keys, which limits their bucketing ability and wastes computation.
@@ -260,14 +241,18 @@ At the other, fully key-aware end of the spectrum, Perfect Hashing algorithms ca
 Our main conceptual contribution is that adapting the hash table's hash function to the keys online is necessary for the best performance as
 adaptivity allows for better bucketing of keys \emph{and} faster hash functions.
 We instantiate the idea of online adaptation with minimal overhead and no change to the hash table API.
-The experiments show that the adaptive approach marries the common-case performance of weak hash functions with the robustness of general-purpose ones.
-\end{abstract}
-
-\keywords{Adaptive, data structure, hash function, hash table, Common Lisp}
-
-\maketitle
+The experiments show that the adaptive approach marries the common-case performance of weak hash functions with the robustness of general-purpose ones.}
+
 
 \section{Introduction}
+
+{
+\renewcommand*{\thefootnote}{*}
+%% Avoid "Package hyperref Warning: Ignoring empty anchor"
+\begin{NoHyper}
+\footnotetext{\dots Especially in Certain Situations}
+\end{NoHyper}
+}
 
 Hash tables \citep{luhn1953new,enwiki:1207615479} map keys to values and are one of the most fundamental data structures.
 As such, their performance is of considerable interest.
@@ -286,6 +271,7 @@ The unchanged parts of a simple $\mathit{put}$ implementation are \textcolor{gra
 The hash function \emph{hash\_fn} may be adapted when there are too many keys in the same bucket, or when rehashing finds that the number of collisions is too high.
 Alternatively, the total cost of access (\Cref{def:cost-of-hashes}) could be tracked, requiring an additional write to memory and also a performance penalty to key deletion.}
   \label{alg:puthash}
+  \hrule
   \begin{algorithmic}[1]
     \color{gray!100}
     \Function{$\operatorname{put}$}{$\mathit{key}$, $\mathit{value}$}
@@ -322,6 +308,7 @@ Alternatively, the total cost of access (\Cref{def:cost-of-hashes}) could be tra
       \State{add $(\mathit{key}, \mathit{value})$ to $\mathit{bucket}$}
     \EndFunction
   \end{algorithmic}
+  \hrule
 \end{algorithm}
 
 It is useful to contrast our method with hand-crafting hash functions for particular key distributions.
@@ -380,6 +367,8 @@ This generalizes the classic definition \citep{fredman1984storing}, which requir
 We say the hashes $h_{1:n}$ are perfectly distributed in $m$ buckets if $m - (n \bmod m)$ buckets have $\floor{n/m}$ hashes in them, and $n \bmod m$ buckets have $\floor{n/m} + 1$ hashes in them.
 \end{definition}
 
+%% KLUDGE: restatable add extra vertical space here for some reason.
+\vspace{-\groundskip}
 \begin{restatable}{proposition}{propperfecthasheshaveminimalcost}[Perfect Hashes have Minimal Cost]
 Let $U(n,m)$ be the bucket count vector of any perfect hash of $n$ keys and $m$ buckets.
 Let $q=\floor{n/m}$ and $r=n \bmod m$.
@@ -438,6 +427,7 @@ It may be worth improving, especially if the hash function can be made faster at
 \begin{algorithm}[t]
   \caption{\small Hashing strings with a $\mathit{limit}$ on the number of characters taken into account. The algorithm moves inwards from the two ends of the string because those tend to be the most informative and because this scheme can be easily extended to reuse a previously computed hash with a lower limit. The function $\mathit{add\_char}$ performs one step of the FNV-1A algorithm.}
   \label{alg:string-hash}
+  \hrule
   \begin{algorithmic}[1]
     \Function{$\operatorname{hash\_string}$}{$s$, $\mathit{limit}$}
       \Let{$h$}{$\operatorname{len}(s)$}
@@ -456,6 +446,7 @@ It may be worth improving, especially if the hash function can be made faster at
       \State\Return{$h$}
     \EndFunction
   \end{algorithmic}
+  \hrule
 \end{algorithm}
 
 In related work, \citet{hentschel2022entropy} engage with one half of this problem: they select high-entropy parts of the key to feed to a general-purpose hash function.
@@ -502,7 +493,6 @@ By compromising the hash function's quality, we run the risk of having to perfor
 \caption{Regret (\Cref{def:regret}) with string keys.
 Adaptive does not gain or significantly compromise on regret.
 Points where the truncation limit changes vary between runs.}
-\Description{}
 }
 
 \newcommand\figstringexistingput{
@@ -527,7 +517,6 @@ Points where the truncation limit changes vary between runs.}
 \end{tikzpicture}
 \caption{PUT timings in nanoseconds with string keys.
 Note the log scales. The plot shows the \emph{average} time for inserting a new key when populating an empty hash table with a given number of keys.}
-\Description{}
 }
 
 \newcommand\figstringexistingget{
@@ -551,7 +540,6 @@ Note the log scales. The plot shows the \emph{average} time for inserting a new 
   \end{semilogxaxis}
 \end{tikzpicture}
 \caption{GET timings with string keys.}
-\Description{}
 }
 
 \begin{figure}[t]
@@ -665,6 +653,7 @@ This is to find the largest power-of-2 factor of the common difference in an ari
 The symbols $\lor$, $\oplus$, $\lnot$ denote the bitwise OR, XOR and NOT operations.
 Note that $\mathit{count\_leading\_zero\_bits}$ is often a single assembly instruction such as LZCNT on x86.}
   \label{alg:detect-shift}
+  \hrule
   \begin{algorithmic}[1]
     \Function{$\operatorname{count\_common\_prefix\_bits}$}{$k_1, \dots, k_n$}
       \Let{$\mathit{mask}$}{$0$}
@@ -675,6 +664,7 @@ Note that $\mathit{count\_leading\_zero\_bits}$ is often a single assembly instr
       \State\Return{$\operatorname{count\_leading\_zero\_bits}(\lnot \mathit{mask})$}
     \EndFunction
   \end{algorithmic}
+  \hrule
 \end{algorithm}
 
 As to safety, if we have $n$ keys, then the probability of a bit appearing constant by chance is $2^{1-n}$ (assuming that bits are $\text{Binomial}(0.5)$ in the hash values).
@@ -704,7 +694,7 @@ Let the keys be distributed over the pages uniformly, $n=|\mathcal{P}|u$, where 
 We assume that all $u$ keys on the same page form random subsets of arithmetic progressions with page specific offsets but the same increments.
 Then, the expected cost of the Pointer-Mix hash function is
 \begin{align*}
-1+\frac{n - u \min(1,\frac{2^{\mathrm{PB} - s}}{m})}{2m}.
+1+\frac{n - u \min\pigl(1,\frac{2^{\mathrm{PB} - s}}{m}\pigr)}{2m}.
 \end{align*}
 \end{restatable}
 \noindent See \Cref{sec:proofs} for the proof.
@@ -741,6 +731,7 @@ Its bucket distribution is very close to that of the uniform hash.
 Note that we count collisions with Prefuzz only at larger sizes; otherwise it adapts only through the max-chain-length mechanism (see \Cref{alg:puthash}) to reduce the overhead.
 We refer to this algorithm as Co+PS>Pr>Mu when comparing minor variations.}
   \label{alg:rehash-eq}
+  \hrule
   \begin{algorithmic}[1]
     \Require{Integer/pointer keys $k_i (i \in [1, \dots, n])$, doubled number of buckets $m$, current hash function $h$.}
     \Procedure{$\operatorname{rehash\_and\_maybe\_adapt\_eq}$}{}
@@ -771,6 +762,7 @@ We refer to this algorithm as Co+PS>Pr>Mu when comparing minor variations.}
       \EndIf
     \EndProcedure
   \end{algorithmic}
+  \hrule
 \end{algorithm}
 
 \subsection{Adapting the Hash Function}
@@ -783,11 +775,6 @@ The adaptation mechanism for \lisp{eq} hash tables (\Cref{alg:rehash-eq}) fleshe
 Hash tables are initialized with the Constant hash.
 When the number of keys exceeds 32, $\mathit{count\_common\_prefix\_bits}$ determines the shift $s$ to use, and we switch to the Pointer-Shift hash function.
 Whenever rehash finds that there are significantly more collisions than would be expected with a uniform hash (see \Cref{sec:number-of-collisions}), the hash table switches to Prefuzz.
-
-We also need to fall back on Murmur3 in case Prefuzz produces too many collisions.
-However, because Prefuzz is somewhat robust and considerably faster than Murmur3, we count collisions only at larger sizes to reduce the adaptation overhead\footnote{The overhead is that of incrementing a single counter if the bucket in \lisp{index-vector} is not zero, which is a hard to predict branch for the CPU.} and otherwise rely on the max-chain-length mechanism from \Cref{alg:puthash} to fall back on the next safer hash function (in the order they appear in $adapt\_and\_rehash\_eq$ in \Cref{alg:rehash-eq}) if the key being inserted falls into a bucket with at least 14 other keys\footnote{With a uniform hash, the probability of the maximum chain length being at most 14 is higher than 99\% for all possible hash table sizes.}.
-Using the tighter limit from \Cref{sec:half-an-example} would be too costly for \lisp{eq} hashing.
-See \Cref{sec:implementation-details} for the more details.
 
 \newcommand\figfixnumprogoneregret{
 \tikzpicturedependsonfile{data/fixnum-prog-1-murmur}
@@ -832,7 +819,6 @@ Murmur closely tracks Uniform.
 Prefuzz is aggressively optimized for small sizes.
 Adaptive (\Cref{alg:rehash-eq}) is a perfect hash here.
 Both Co+Pr (Constant followed by Prefuzz) and Adaptive use the Constant hash until the fixed switch point at 32 keys (black dot).}
-\Description{}
 }
 
 \newcommand\figfixnumprogoneput{
@@ -870,7 +856,6 @@ Both Co+Pr (Constant followed by Prefuzz) and Adaptive use the Constant hash unt
 \caption{PUT timings with \texttt{FIXNUM} \texttt{:PROG 1}.
 Prefuzz outperforms Murmur even at large sizes despite higher regret because it's friendlier to the cache (its collisions are between subsequent elements of the progression), and its combination with Constant is even faster.
 Thus, despite being a perfect hash, Adaptive can improve on them only marginally.}
-\Description{}
 }
 
 \newcommand\figfixnumprogoneget{
@@ -909,7 +894,6 @@ Thus, despite being a perfect hash, Adaptive can improve on them only marginally
 \caption{GET timings with \texttt{FIXNUM} \texttt{:PROG 1}.
 Keys are queried in random order so regret matters more here than with PUT, but the cache-friendliness of Prefuzz still keeps it ahead of Murmur.
 As expected, Adaptive can finally benefit from its zero regret after the Constant hash phase.}
-\Description{}
 }
 
 \begin{figure}[t]
@@ -921,6 +905,11 @@ As expected, Adaptive can finally benefit from its zero regret after the Constan
 \figfixnumprogoneput
 \label{fig:fixnum-prog-1-put}
 \end{figure}
+
+We also need to fall back on Murmur3 in case Prefuzz produces too many collisions.
+However, because Prefuzz is somewhat robust and considerably faster than Murmur3, we count collisions only at larger sizes to reduce the adaptation overhead\footnote{The overhead is that of incrementing a single counter if the bucket in \lisp{index-vector} is not zero, which is a hard to predict branch for the CPU.} and otherwise rely on the max-chain-length mechanism from \Cref{alg:puthash} to fall back on the next safer hash function (in the order they appear in $rehash\_and\_maybe\_adapt\_eq$ in \Cref{alg:rehash-eq}) if the key being inserted falls into a bucket with at least 14 other keys\footnote{With a uniform hash, the probability of the maximum chain length being at most 14 is higher than 99\% for all possible hash table sizes.}.
+Using the tighter limit from \Cref{sec:half-an-example} would be too costly for \lisp{eq} hashing.
+See \Cref{sec:implementation-details} for the more details.
 
 \begin{figure}[t]
 \figfixnumprogoneget
@@ -942,6 +931,42 @@ We conducted experiments on SBCL's \lisp{eq} hash tables with various hash funct
 Our experimental methodology is the same as in \Cref{sec:experiments-with-string-keys} except for how keys are generated, which we briefly describe below (see \Cref{sec:microbenchmarking-methodology} for the details).
 In the experiments, Co+Pr starts with the Constant hash and switches to Prefuzz above 32 keys.
 Adaptive behaves as described in \Cref{alg:rehash-eq}.
+
+\begin{itemize}
+\item{(\texttt{FIXNUM} \texttt{:PROG 1})}
+The first experiment is with \lisp{fixnum}s\footnote{A fixnum is a signed integer in Lisp that fits into a machine word. It's similar to an \texttt{int64} on x86-64.} following an arithmetic progression with increment 1 (denoted by \texttt{:PROG 1}).
+As \Cref{fig:fixnum-prog-1-regret} shows, the regrets of Murmur and Uniform are very close, as expected.
+Prefuzz seems to be aggressively optimized for small hash table sizes, and Adaptive is a perfect hash in this simple scenario.
+However, differences in regret do not predict actual performance well, which is most visible in \Cref{fig:fixnum-prog-1-put}, where insertion is much faster with Prefuzz than with Murmur even where the latter has much smaller regret.
+This is because the collisions with Prefuzz are between keys close in insertion order, which benefits the CPU's cache.
+The same effect is present in lookups (\Cref{fig:fixnum-prog-1-get}), although to a lesser degree because the benchmark looks up keys in random order, so some random access to memory is inevitable.
+See \Cref{sec:results-for-fixnum-prog-1} for the full set of results.
+
+\item{(\texttt{FLOAT} \texttt{:PROG 1})}
+Similar to the previous \lisp{fixnum} case, we also tested \lisp{single-float} keys.
+As the regret curves in \Cref{fig:float-prog-1-regret} show, Prefuzz suffers a catastrophic failure, placing most keys in the same bucket, but Adaptive takes advantage of the many constant low bits in the keys, eventually falling back to Prefuzz and then to Murmur.
+See \Cref{sec:results-for-float-prog-1} for the full set of results.
+
+\item{(\texttt{FIXNUM} \texttt{:PROG 12})}
+Next, we tested arithmetic progressions with increment 12.
+This is intended to test whether the shift detection in \Cref{alg:detect-shift} works.
+The regret curves in \Cref{fig:fixnum-prog-12-regret} and the operation timings tell a similar story as with \texttt{:PROG 1} except that Adaptive is no longer a perfect hash due to Pointer-Shift's $k \gg \mathrm{PB}$ term.
+See \Cref{sec:results-for-fixnum-prog-12} for more.
+
+\item{(\texttt{FIXNUM} \texttt{:RND 6})}
+Like \texttt{:PROG 6}, but keys follow a random progression: 0--5 values are skipped randomly between subsequent keys.
+This is intended to approximate populating a hash table with non-uniformly sized keys or values being allocated in a tight loop.
+Results in \Cref{sec:results-for-fixnum-rnd-6} shows that Prefuzz is better than Murmur, and the large gains made by the Constant hash persist, but with less structure in the key sets, Prefuzz is harder to beat.
+
+\item{(\texttt{CONS} \texttt{:RND 6})}
+Similar to \texttt{FIXNUM} \texttt{:RND 6}, but we allocate real \lisp{cons} objects.
+See \Cref{sec:results-for-cons-rnd-6} for the results.
+
+\item{(\texttt{SYMBOL} \texttt{:EXISTING})}
+Finally, we explore the case with the set of existing \lisp{symbol}s from Lisp as keys.
+\Cref{sec:results-for-symbol-existing} shows that despite the scarcity of structure in the key distribution, Prefuzz maintains a small advantage over Murmur.
+As expected, Co+Pr and Adaptive follow suit, most of their advantage being in the Constant hash phase.
+\end{itemize}
 
 \newcommand\figfloatprogoneregret{
 \begin{tikzpicture}
@@ -983,7 +1008,6 @@ Single floats are especially problematic for Prefuzz because they can have many 
 Adaptive detects these constant low bits and does better than Uniform until variation in the floating point exponents makes its original estimate of the number of constant low bits invalid, and the resulting gradual increase in collisions makes it switch to Prefuzz at rehash time.
 This is a spectacularly bad idea in this scenario, and the high number of collisions causes an immediate switch to Murmur.
 The switch times vary by hash table because the key sets are generated starting from random offsets.}
-\Description{}
 }
 
 \newcommand\figfixnumprogtwelveregret{
@@ -1023,48 +1047,13 @@ The switch times vary by hash table because the key sets are generated starting 
 \caption{Regret with \texttt{FIXNUM} \texttt{:PROG 12}.
 Murmur closely tracks Uniform, but Prefuzz is better across almost the whole range.
 Arithmetic (\Cref{sec:the-arithmetic-hash}) would be a perfect hash here, but Adaptive, which uses Pointer-Shift (\Cref{sec:the-pointer-shift-hash}), is not quite perfect due to the interference of its $k \gg \mathrm{PB}$ term.}
-\Description{}
 }
 
-\begin{itemize}
-\item{(\texttt{FIXNUM} \texttt{:PROG 1})}
-The first experiment is with \lisp{fixnum}s\footnote{A fixnum is a signed integer in Lisp that fits into a machine word. It's similar to an \texttt{int64} on x86-64.} following an arithmetic progression with increment 1 (denoted by \texttt{:PROG 1}).
-As \Cref{fig:fixnum-prog-1-regret} shows, the regrets of Murmur and Uniform are very close, as expected.
-Prefuzz seems to be aggressively optimized for small hash table sizes, and Adaptive is a perfect hash in this simple scenario.
-However, differences in regret do not predict actual performance well, which is most visible in \Cref{fig:fixnum-prog-1-put}, where insertion is much faster with Prefuzz than with Murmur even where the latter has much smaller regret.
-This is because the collisions with Prefuzz are between keys close in insertion order, which benefits the CPU's cache.
-The same effect is present in lookups (\Cref{fig:fixnum-prog-1-get}), although to a lesser degree because the benchmark looks up keys in random order, so some random access to memory is inevitable.
-See \Cref{sec:results-for-fixnum-prog-1} for the full set of results.
-
-\item{(\texttt{FLOAT} \texttt{:PROG 1})}
-Similar to the previous \lisp{fixnum} case, we also tested \lisp{single-float} keys.
-As the regret curves in \Cref{fig:float-prog-1-regret} show, Prefuzz suffers a catastrophic failure, placing most keys in the same bucket, but Adaptive takes advantage of the many constant low bits in the keys, eventually falling back to Prefuzz and then to Murmur.
-See \Cref{sec:results-for-float-prog-1} for the full set of results.
-
-\item{(\texttt{FIXNUM} \texttt{:PROG 12})}
-Next, we tested arithmetic progressions with increment 12.
-This is intended to test whether the shift detection in \Cref{alg:detect-shift} works.
-The regret curves in \Cref{fig:fixnum-prog-12-regret} and the operation timings tell a similar story as with \texttt{:PROG 1} except that Adaptive is no longer a perfect hash due to Pointer-Shift's $k \gg \mathrm{PB}$ term.
-See \Cref{sec:results-for-fixnum-prog-12} for more.
-
-\item{(\texttt{FIXNUM} \texttt{:RND 6})}
-Like \texttt{:PROG 6}, but keys follow a random progression: 0--5 values are skipped randomly between subsequent keys.
-This is intended to approximate populating a hash table with non-uniformly sized keys or values being allocated in a tight loop.
-Results in \Cref{sec:results-for-fixnum-rnd-6} shows that Prefuzz is better than Murmur, and the large gains made by the Constant hash persist, but with less structure and more noise in the key sets, Prefuzz is becoming harder to beat.
-
-\item{(\texttt{CONS} \texttt{:RND 6})}
-Similar to \texttt{FIXNUM} \texttt{:RND 6}, but we allocate real \lisp{cons} objects.
-See \Cref{sec:results-for-cons-rnd-6} for the results.
 \begin{figure}[t]
 \figfloatprogoneregret
 \label{fig:float-prog-1-regret}
 \end{figure}
 
-\item{(\texttt{SYMBOL} \texttt{:EXISTING})}
-Finally, we explore the case where keys are not allocated a tight loop that populates the hash table by using the set of existing \lisp{symbol}s from Lisp as keys.
-\Cref{sec:results-for-symbol-existing} shows that despite the scarcity of structure in the key distribution, Prefuzz maintains a small advantage over Murmur.
-As expected, Co+Pr and Adaptive follow in suite, most of their advantage being in the Constant hash phase.
-\end{itemize}
 \begin{figure}[t]
 \figfixnumprogtwelveregret
 \label{fig:fixnum-prog-12-regret}
@@ -1084,24 +1073,20 @@ The adaptive approach combines the worst-case safety of Murmur with the common-c
 
 Microbenchmarks are useful indicators of the highest achievable throughput, but their results do not necessarily carry over to more complex workloads, where factors such as code size and complexity gain importance.
 To investigate this issue, we conducted experiments where hash table operations constitute only a small fraction of the workload.
-In particular, we measured the times to
+In particular, we measured the times to 1.~compile and load a set of libraries; 2.~run the tests of the same set of libraries; 3.~run each test file in SBCL's \texttt{tests/} directory.
+The detailed results are in \Cref{sec:macrobenchmark-results}; here, we only provide a summary.
 \begin{enumerate}
-\item compile and load a set of libraries;
-\item run the tests of the same set of libraries;
-\item run each test file in SBCL's \texttt{tests/} directory.
-\end{enumerate}
-
-\Cref{sec:macrobenchmark-results} has the detailed results; here, we only provide a summary.
-Among the three benchmarking suites, the first one is the heaviest on \lisp{eq} and \lisp{equal} hash table operations.
-With SBCL's statistical profiler, we estimated that about 1.7\% of the total runtime was spent in small \lisp{eq} hash tables (that is, within Constant hash's range of 0--32 keys) and 1.3\% in larger ones, while operations on \lisp{equal} hash tables took 1\%.
+\item The first suite is the heaviest on \lisp{eq} and \lisp{equal} hash table operations.
+With SBCL's statistical profiler, we estimated that about 1.7\% of the total runtime was spent in small \lisp{eq} hash tables (that is, within the Constant hash's range of 0--32 keys) and 1.3\% in larger ones, while operations on \lisp{equal} hash tables took 1\%.
 The relative speedup was 8\% in the large \lisp{eq} case and 50\% for \lisp{equal}.
-The gain in the small \lisp{eq} case is harder to pin down because Constant hash's significantly reduced garbage collection cost; we estimate it to lie in the 8\%--14\% range.
+The gain in the small \lisp{eq} case is harder to pin down because the Constant hash's significantly reduced garbage collection cost; we estimate it to lie in the 8\%--14\% range.
 
-In the second suite, small/large \lisp{eq} and \lisp{equal} hash table operations constituted 0.55\%, 0.25\% and 0.3\% of the baseline result.
+\item In the second suite, small/large \lisp{eq} and \lisp{equal} hash table operations constituted 0.55\%, 0.25\% and 0.3\% of the baseline result.
 Relative gains were as previously except for the large \lisp{eq} case, possibly because our benchmarking methodology is not able to detect differences so small, or because the increased code size is not worth it in code paths so cold.
 
-Finally, we timed SBCL tests on a per-file basis and found no major performance regressions.
+\item Finally, timing SBCL tests on a per-file basis revealed no major performance regressions.
 Overall, we observed a 0.7\% gain due to adaptive \lisp{eq} hashing, with adaptive \lisp{equal} hashing contributing another 1.5\%, which came almost exclusively from the two tests with longer list keys (see \Cref{sec:experiments-with-list-keys}).
+\end{enumerate}
 
 In summary, by surviving the difficult transition from hot-path microbenchmarking to the cooler workloads reported in this section, adaptive hashing emerges as a method of practical relevance.
 
@@ -1109,18 +1094,18 @@ In summary, by surviving the difficult transition from hot-path microbenchmarkin
 \section{Related Works}
 
 Our method takes inspiration from Perfect Hashing, which selects a hash function for a given set of keys (known as static hashing).
-As its name implies, Dynamic Perfect Hashing \citep{dietzfelbinger1994dynamic,belazzougui2009hash} allows the set of keys to change but still guarantees worst-case constant lookup time.
+Dynamic Perfect Hashing \citep{dietzfelbinger1994dynamic,belazzougui2009hash} allows the set of keys to change but still guarantees worst-case constant lookup time.
 However, it requires more memory than plain hash tables, so it is not a drop-in replacement for them.
 Cuckoo hashing also has worst-case constant lookup time but with a lower memory footprint.
-In a sequential implementation, it requires $1.5$ hash function evaluations and memory accesses on average per lookup, which is about what the uniform hash has at load factor 1 (see \Cref{prop:expected-cost-of-uh}).
+In a sequential implementation, it requires 1.5 hash function evaluations and memory accesses on average per lookup, which is about what the uniform hash has at load factor 1 (see \Cref{prop:expected-cost-of-uh}).
 
 Although Rabbit Hashing \citep{rabbithashing} and the hash table by \citet{iwrotehtefastesthashtable} utilize maximum probe length to determine when to resize or reseed, unlike our adaptive method, they stop short of modifying the functional form of the hash, nor do they tailor it to fit a specific set of keys.
 
-VIP hashing \citep{kakaraparthy2022vip} moves the more frequently accessed keys earlier in the collision chains to reduce the average lookup cost.
-Since adapting to the key access distribution is performed online, this method also needs to take extreme care to minimize overhead.
-In contrast to our work, they perform online adaptation of the hash table internal storage layout but leave the hash function constant.
+VIP hashing \citep{kakaraparthy2022vip} moves frequently accessed keys earlier in the collision chains to reduce the average lookup cost, adapting the storage layout to the access pattern.
+As with our approach, this adaptation is performed online and requires careful management to minimize runtime overhead.
+However, in contrast to our work, VIP hashing leaves the hash function itself constant.
 
-\Citet{hentschel2022entropy} propose a method to learn the hash function offline from samples of the key distribution by using the most informative parts of compound keys.
+\Citet{hentschel2022entropy} propose to learn the hash function offline from samples of the key distribution by using the most informative parts of compound keys.
 Our case study on string keys in \Cref{sec:half-an-example} can be seen as an online version of their method, with the expensive learning phase removed.
 
 In the taxonomy of \citet{chi2017hashing}, adaptive hashing falls under data-dependent hashing although they assume that the training is performed offline.
@@ -1136,16 +1121,16 @@ This hardcoded limit made hashing faster, but as it could lead to lots of collis
 
 We have laid out the case for adaptive hash functions, which reside between key-agnostic and perfect hashes.
 Our primary contribution lies in reconceptualizing hash tables as inherently adaptive data structures, which can marry the theoretical guarantees of universal hashing with the common-case performance of weak hash functions.
-To support this viewpoint, we implemented this approach in a real-life system and demonstrated improved performance as well as robustness on string and integer/pointer hashing by capturing real-life key patterns and providing efficient search algorithms.
+To validate this approach, we implemented the adaptive framework and demonstrated improved performance as well as robustness on string and integer/pointer hashing by capturing real-life key patterns and providing efficient search algorithms.
 The design space opened up by the adaptive hashing framework is large, and the adaptation mechanisms investigated in this work hardly cover a substantial or particularly imaginative part of it, leaving ample room for further developments.
 In particular, the max-chain-length mechanism can form the basis of a defense against denial-of-service collision attacks without constraining the choice of hash function \citep{aumasson2012siphash}.
 
 Finally, the source code of the SBCL changes and the benchmarking code to reproduce the experimental results are open-sourced and available at \url{https://github.com/melisgl/sbcl/tree/adaptive-hash}.
 
 
-\begin{acks}
+\section*{Acknowledgements}
 We thank Christophe Rhodes, Miloš Stanojević, Andrew Senior, Paul-Virak Khuong, and the reviewers for their valuable comments.
-\end{acks}
+
 
 \bibliographystyle{plainnat}
 \bibliography{paper}
@@ -1156,7 +1141,7 @@ We thank Christophe Rhodes, Miloš Stanojević, Andrew Senior, Paul-Virak Khuong
 \section{Proofs}
 \label{sec:proofs}
 
-We restate the propositions from \Cref{sec:the-case-for-adaptive-hashing} and \Cref{sec:the-pointer-mix-hash} and provide proofs.
+We restate propositions and provide proofs.
 
 \propexpectedcostofuh*
 \begin{proof}
@@ -1171,7 +1156,7 @@ Writing the expected number of comparisons for a lookup as a sum over the $i$th 
 \propperfecthasheshaveminimalcost*
 \begin{proof}
 A set of hash values is either perfect or non-perfect.
-Since all perfect hashes have the same cost $C(U(n,m))$, if we could construct a perfect hash with lower cost from any non-perfect hash, it would follow that $C(U(n,m))$ is minimal.
+Since all perfect hashes have the same cost $C(U(n,m))$, if we construct a perfect hash with lower cost from any non-perfect hash, it follows that $C(U(n,m))$ is minimal.
 
 Next, we show one such construction.
 For any non-perfect set of hash values with bucket counts $c$, there are always two buckets $i$ and $j$ such that $c_i > c_j + 1$ (else it would be a perfect hash due to bucket counts having to sum to $n$).
@@ -1184,7 +1169,7 @@ Let $\pi_{1:qm}(k_{1:qm}) = [\pi_1(k_1), \dots, \pi_{qm}(k_{qm})]$.
 Then,
 \begin{align*}
 \E_{\pi_{1:qm}} &R(\pi_{1:qm}(k_{1:qm}), m)\\
-&= \E_{\pi_{1:qm}} C\big(c(\pi_{1:qm}(k_{1:qm}),m)\big) - C\big(U(n,m)\big)\\
+&= \E_{\pi_{1:qm}}\bigl[C\bigl(c(\pi_{1:qm}(k_{1:qm}),m)\bigr) - C\bigl(U(n,m)\bigr)\bigr]\\
 &= 1+\frac{qm-1}{2m} - \frac{q+1}{2}\\
 &= 0.5 + \frac{1}{m}.
 \qedhere
@@ -1200,7 +1185,7 @@ Due to the subset assumption, it is also true if the hash table is large enough 
 The cost decomposes as the sum of the number of hashes in the same bucket as keys are added one by one.
 Thus, when there are $(p-1)$ previous pages' worth of keys already in the hash table, all $u$ keys on the next page will contribute the same amount $1+(p-1)\frac{u}{m}$ to the cost because there are no collisions between them.
 \begin{align*}
-C &= n^{-1}\sum_{p=1}^{\abs{\mathcal{P}}} u\Big(1+(p-1)\frac{u}{m}\Big)
+C &= n^{-1}\sum_{p=1}^{\abs{\mathcal{P}}} u\Pigl(1+(p-1)\frac{u}{m}\Pigr)
 %% &= n^{-1}\sum_{p=1}^{|P|} u+(p-1)\frac{u^2}{m} \\
 %% &= n^{-1}\Big(|P|(u-\frac{u^2}{m}\Big) + \sum_{p=1}^{|P|} p\frac{u^2}{m} \\
 %% &= 1+ \frac{u^2|P|(|P|+1)}{2m} \\
@@ -1210,7 +1195,7 @@ C &= n^{-1}\sum_{p=1}^{\abs{\mathcal{P}}} u\Big(1+(p-1)\frac{u}{m}\Big)
 Second, if keys (shifted by $s$) on the same page may collide randomly modulo $m$, then we can expect to get only $um^{-1}2^{\mathrm{PB} - s}$ guaranteed no colliding keys.
 Updating our formula, we get that
 \begin{align*}
-C &= 1+\frac{n - u \min(1,\frac{2^{\mathrm{PB} - s}}{m})}{2m}.
+C &= 1+\frac{n - u \min\pigl(1,\frac{2^{\mathrm{PB} - s}}{m}\pigr)}{2m}.
 \qedhere
 \end{align*}
 \end{proof}
@@ -1307,26 +1292,21 @@ There is no SIMD, and SBCL does not devirtualize calls.
 At this time, there is no \lisp{index-vector} and \lisp{next-vector}.
 The \lisp{pairs} vector is doubled in size as more keys are added, but no rehashing is necessary as there are no chains yet.
 Once the number of keys exceeds 32, $\mathit{count\_common\_prefix\_bits}$ (see \Cref{alg:detect-shift}) is invoked with 16 keys to guess the shift $s$, we switch to the normal SBCL hash table implementation, set the hash function to $\mathit{pointer\_shift}$ and rehash (\Cref{alg:rehash-eq}).
-Switching to the new hash function is implemented as changing the set of accessors.
+Switching to the new hash function is implemented as replacing the GET, PUT, DEL implementations via their accessors.
 
 We added new hash table accessors for Murmur and added a new slot for the detected shift $s$ to the hash table structure.
 Instead of adding separate accessors for Pointer-Shift, which actually had the best performance in microbenchmarks, we made Pointer-Shift and Prefuzz share accessors, and to the inlined hash function we added an $\mathit{if} s = 0$ that dispatches to Prefuzz.
 This is to reduce pressure on the instruction cache, which is an important consideration in macrobenchmarks.
 To minimize the performance penalty on rehashing, we lift this dispatch out of the rehashing loop in the same way that dispatches to different accessors are.
 
-For \lisp{equal} hash tables, we pack the truncation limit and the current max-chain-length into a single machine integer and store it in the same slot that we used for $s$ in the \lisp{eq} case.
+In \lisp{equal} hash tables, the truncation limit and the current max-chain-length are packed into a single machine integer and stored in the same slot that we used for $s$ in the \lisp{eq} case.
 
 
 \section{Benchmarking Environment}
 \label{sec:benchmarking-environment}
 
 All reported results are from a single Intel Core i7-1185G7 laptop running Linux with the \texttt{performance} scaling governor.
-Turbo boost and CPU idle states were disabled.
-\begin{verbatim}
-echo performance > /sys/firmware/acpi/platform_profile
-echo 1 > /sys/devices/system/cpu/intel_pstate/no_turbo
-cpupower -c 3 idle-set -D 0
-\end{verbatim}
+Turbo boost and CPU idle states were disabled (\texttt{cpupower -c 3 idle-set -D 0}).
 The benchmarking process was run at maximum priority (\texttt{nice -n -20}), pinned to a single CPU (\texttt{taskset -c 3}).
 
 
@@ -1343,16 +1323,16 @@ First, a set of keys is generated for the given type (e.g. \texttt{FIXNUM}) and 
 The hash table is allocated in an empty state with comparison function \lisp{equal} for string keys or \lisp{eq} in all other cases.
 Then, we measure the average time it takes to perform a given operation for keys in the key set:
 \begin{itemize}
-\item{PUT}: Inserting one key when populating the hash table with all keys in the key set.
+\item{PUT}: Inserting a key when populating the hash table.
 Keys are inserted in the order they were generated.
 \item{GET}: Looking up a key in the key set.
-Keys are looked up in random order.
+Random order.
 \item{MISS}: Looking up a key not in the key set.
-Keys are looked up in random order.
+Random order.
 \item{DEL}: Deleting a key in the key set.
-Keys are deleted in random order.
+Random order.
 \end{itemize}
-The above steps are performed in the order listed.
+These steps are performed in the order listed.
 That is, first the hash table is populated, and PUT is measured, followed by GET then MISS.
 Finally, DEL timings are taken.
 At the end of the DEL phase, the hash table is once again empty.
@@ -1360,13 +1340,6 @@ At the end of the DEL phase, the hash table is once again empty.
 These average times over key sets have a low relative standard deviation of about 0\%--2\%.
 To reduce the variance further, we take multiple such measurements and report their average.
 In particular, we take at least 3 measurements, then continue until the total number operations performed exceeds \num{5000000}.
-
-Finally, when the number of keys is less than 100, timing granularity is a limiting factor, so we allocate a number of hash tables (plus the two key sets for each, the second being for MISS) and measure the total time it takes to e.g. populate them.
-The number of hash tables is chosen such that the total number of keys is at least 100.
-This is a low enough number that the total memory footprint of the allocated hash tables stays below 32KB, the CPU's L1 cache size in our benchmarking environment.
-
-SBCL had a 16GB heap.
-
 
 \begin{table}
   \caption{Estimated means and relative standard errors of real (wall clock) and CPU times in seconds to \emph{compile and load} a set of libraries.}
@@ -1384,14 +1357,6 @@ Equal*             & 23.824  &     0.02\% &  23.792 &     0.02\%
   \end{tabular}
 \end{table}
 
-\section{Macrobenchmark Results}
-\label{sec:macrobenchmark-results}
-
-Here, we describe our macrobenchmarking experiments in \Cref{sec:macrobenchmarks} in more detail.
-In the first suite, 16 libaries were compiled and loaded with \lisp{(asdf:load-system <library> :force t)}.
-In the second, the tests of the same libraries were run with \lisp{(asdf:test-system <library>)}.
-In the third, SBCL tests were run with file-by-file with \texttt{tests/run-tests.sh}.
-
 \begin{table}
   \caption{Estimated times to \emph{test} a set of libraries.}
   \label{tab:test-system-results}
@@ -1407,6 +1372,21 @@ Co+PS>Pr>Mu        & 25.372  &     0.03\% &  24.374 &     0.02\% \\
 Equal*             & 25.257  &     0.03\% &  24.256 &     0.02\%
   \end{tabular}
 \end{table}
+
+Finally, with fewer than 100 keys, timing granularity is a limiting factor, so we allocate a number of hash tables (plus the two key sets for each, the second being for MISS) and measure the total time it takes to e.g. populate them.
+The number of hash tables is chosen such that the total number of keys is at least 100.
+This is a low enough number that the total memory footprint of the allocated hash tables stays below 32KB, the CPU's L1 cache size in our benchmarking environment.
+
+SBCL had a 16GB heap.
+
+
+\section{Macrobenchmark Results}
+\label{sec:macrobenchmark-results}
+
+Here, we describe our macrobenchmarking experiments in \Cref{sec:macrobenchmarks} in more detail.
+In the first suite, 16 libaries were compiled and loaded with \lisp{(asdf:load-system <library> :force t)}.
+In the second, the tests of the same libraries were run with \lisp{(asdf:test-system <library>)}.
+In the third, SBCL tests were run with file-by-file with \texttt{tests/run-tests.sh}.
 
 \begin{table}
   \caption{Estimated times to \emph{run SBCL tests}.}
@@ -1434,7 +1414,7 @@ We compared the following configurations (following a naming convention like in 
 \item \textbf{Co+PS>Pr>Mu}: Constant hash followed by Pointer-Shift with fallback to Prefuzz then to Murmur3 (called Adaptive in \Cref{sec:microbenchmarks}).
 \item \textbf{Equal*}: Like the previous, but the \lisp{equal} hash is also adaptive (see \Cref{sec:half-an-example}).
 \end{enumerate}
-Note that since Pr and Co+Pr lack an eventual fallback to Murmur, they have an easy-to-trigger unbounded worst case, so it may be more pertinent to think of Mu as the baseline.
+Note that since Pr and Co+Pr lack an eventual fallback to Murmur, they have an easy-to-trigger unbounded worst case, so it may be pertinent to think of Mu as the baseline.
 
 In the benchmarking environment described in \Cref{sec:benchmarking-environment}, all individual benchmarks in the three benchmark suites (e.g. running the tests of a single library or a single SBCL test file) were run 10 times on each configuration with their runs interleaved to reduce the effect of correlated noise.
 We estimated the mean time a benchmark took on each configuration and computed the standard error of this estimated mean.
@@ -1443,7 +1423,6 @@ We report the total estimated mean times for each benchmark suite along with the
 
 \raggedbottom
 
-\clearpage
 \section{Results for Strings}
 \label{sec:results-for-strings}
 
@@ -1488,7 +1467,6 @@ The MISS key set consists of random strings with length sampled uniformly from t
   \end{semilogxaxis}
 \end{tikzpicture}
 \caption{MISS timings with string keys}
-\Description{}
 \label{fig:string-existing-miss}
 \end{figure}
 
@@ -1513,7 +1491,6 @@ The MISS key set consists of random strings with length sampled uniformly from t
   \end{semilogxaxis}
 \end{tikzpicture}
 \caption{DEL timings with string keys}
-\Description{}
 \label{fig:string-existing-del}
 \end{figure}
 
@@ -1574,7 +1551,6 @@ For GET, MISS, and DEL, keys are presented in random order.
   \end{axis}
 \end{tikzpicture}
 \caption{MISS timings with \texttt{FIXNUM} \texttt{:PROG 1}}
-\Description{}
 \label{fig:fixnum-prog-1-miss}
 \end{figure}
 
@@ -1616,7 +1592,6 @@ For GET, MISS, and DEL, keys are presented in random order.
   \end{axis}
 \end{tikzpicture}
 \caption{DEL timings with \texttt{FIXNUM} \texttt{:PROG 1}}
-\Description{}
 \label{fig:fixnum-prog-1-del}
 \end{figure}
 
@@ -1661,7 +1636,6 @@ Keys are generated as in \Cref{sec:results-for-fixnum-prog-1}, but the \lisp{fix
   \end{axis}
 \end{tikzpicture}
 \caption{PUT timings with \texttt{FLOAT} \texttt{:PROG 1}}
-\Description{}
 \label{fig:float-prog-1-put}
 \end{figure}
 
@@ -1694,7 +1668,6 @@ Keys are generated as in \Cref{sec:results-for-fixnum-prog-1}, but the \lisp{fix
   \end{axis}
 \end{tikzpicture}
 \caption{GET timings with \texttt{FLOAT} \texttt{:PROG 1}}
-\Description{}
 \label{fig:float-prog-1-get}
 \end{figure}
 
@@ -1731,7 +1704,6 @@ Keys are generated as in \Cref{sec:results-for-fixnum-prog-1}, but the \lisp{fix
   \end{axis}
 \end{tikzpicture}
 \caption{MISS timings with \texttt{FLOAT} \texttt{:PROG 1}}
-\Description{}
 \label{fig:float-prog-1-miss}
 \end{figure}
 
@@ -1773,7 +1745,6 @@ Keys are generated as in \Cref{sec:results-for-fixnum-prog-1}, but the \lisp{fix
   \end{axis}
 \end{tikzpicture}
 \caption{DEL timings with \texttt{FLOAT} \texttt{:PROG 1}}
-\Description{}
 \label{fig:float-prog-1-del}
 \end{figure}
 
@@ -1820,7 +1791,6 @@ Same as \texttt{FIXNUM} \texttt{:PROG 1}, but with a difference of 12.
 \caption{PUT timings with \texttt{FIXNUM} \texttt{:PROG 12}.
 Prefuzz outperforms Murmur due to its speed, lower regret and cache-friendliness.
 Adaptive is able to benefit from its advantage in regret only at larger sizes.}
-\Description{}
 \label{fig:fixnum-prog-12-put}
 \end{figure}
 
@@ -1854,7 +1824,6 @@ Adaptive is able to benefit from its advantage in regret only at larger sizes.}
 \end{tikzpicture}
 \caption{GET timings with \texttt{FIXNUM} \texttt{:PROG 12}.
 Compared to PUT, differences in regret translate more clearly to lookup performance because keys are queried in random order.}
-\Description{}
 \label{fig:fixnum-prog-12-get}
 \end{figure}
 
@@ -1887,7 +1856,6 @@ Compared to PUT, differences in regret translate more clearly to lookup performa
   \end{axis}
 \end{tikzpicture}
 \caption{MISS timings with \texttt{FIXNUM} \texttt{:PROG 12}}
-\Description{}
 \label{fig:fixnum-prog-12-miss}
 \end{figure}
 
@@ -1920,7 +1888,6 @@ Compared to PUT, differences in regret translate more clearly to lookup performa
   \end{axis}
 \end{tikzpicture}
 \caption{DEL timings with \texttt{FIXNUM} \texttt{:PROG 12}}
-\Description{}
 \label{fig:fixnum-prog-12-del}
 \end{figure}
 
@@ -1968,7 +1935,6 @@ Similar to \texttt{:PROG 6}, but the difference between successive keys is sampl
 \caption{Regret with \texttt{FIXNUM} \texttt{:RND 6}.
 Prefuzz does better than Murmur initially but gradually loses its edge.
 Adaptive keeps its edge.}
-\Description{}
 \label{fig:fixnum-rnd-6-regret}
 \end{figure}
 
@@ -2001,7 +1967,6 @@ Adaptive keeps its edge.}
   \end{axis}
 \end{tikzpicture}
 \caption{PUT timings with \texttt{FIXNUM} \texttt{:RND 6}. Once again, the advantage of Prefuzz over Murmur grows with size because it is friendlier to the cache. Adaptive manages to translate some of its lead in regret into outright speed.}
-\Description{}
 \label{fig:fixnum-rnd-6-put}
 \end{figure}
 
@@ -2034,7 +1999,6 @@ Adaptive keeps its edge.}
   \end{axis}
 \end{tikzpicture}
 \caption{GET timings with \texttt{FIXNUM} \texttt{:RND 6}. Prefuzz is considerably ahead of Murmur at all sizes. Adaptive is better than Prefuzz at larger sizes.}
-\Description{}
 \label{fig:fixnum-rnd-6-get}
 \end{figure}
 
@@ -2067,7 +2031,6 @@ Adaptive keeps its edge.}
   \end{axis}
 \end{tikzpicture}
 \caption{MISS timings with \texttt{FIXNUM} \texttt{:RND 6}}
-\Description{}
 \label{fig:fixnum-rnd-6-miss}
 \end{figure}
 
@@ -2100,7 +2063,6 @@ Adaptive keeps its edge.}
   \end{axis}
 \end{tikzpicture}
 \caption{DEL timings with \texttt{FIXNUM} \texttt{:RND 6}}
-\Description{}
 \label{fig:fixnum-rnd-6-del}
 \end{figure}
 
@@ -2155,7 +2117,6 @@ Even the regret of Adaptive is affected: it improves to an unexpected level but 
 Murmur closely tracks Uniform.
 Prefuzz works well at small sizes.
 Adaptive is a bit better still.}
-\Description{}
 \label{fig:cons-rnd-6-regret}
 \end{figure}
 
@@ -2188,7 +2149,6 @@ Adaptive is a bit better still.}
   \end{axis}
 \end{tikzpicture}
 \caption{PUT timings with \texttt{CONS} \texttt{:RND 6}. Prefuzz outperforms Murmur even at large sizes despite its higher regret because its collisions are between subsequent elements of the progression, which is friendly to the cache.}
-\Description{}
 \label{fig:cons-rnd-6-put}
 \end{figure}
 
@@ -2221,7 +2181,6 @@ Adaptive is a bit better still.}
   \end{axis}
 \end{tikzpicture}
 \caption{GET timings with \texttt{CONS} \texttt{:RND 6}}
-\Description{}
 \label{fig:cons-rnd-6-get}
 \end{figure}
 
@@ -2254,7 +2213,6 @@ Adaptive is a bit better still.}
   \end{axis}
 \end{tikzpicture}
 \caption{MISS timings with \texttt{CONS} \texttt{:RND 6}}
-\Description{}
 \label{fig:cons-rnd-6-miss}
 \end{figure}
 
@@ -2287,7 +2245,6 @@ Adaptive is a bit better still.}
   \end{axis}
 \end{tikzpicture}
 \caption{DEL timings with \texttt{CONS} \texttt{:RND 6}}
-\Description{}
 \label{fig:cons-rnd-6-del}
 \end{figure}
 
@@ -2348,7 +2305,6 @@ The MISS key set is generated with \lisp{(gensym)}.
 \caption{Regret with \texttt{SYMBOL} \texttt{:EXISTING}.
 All hashes closely track Uniform.
 Adaptive, which leaves memory addresses most intact, takes advantage of the nature of the data at close to maximal sizes.}
-\Description{}
 \label{fig:symbol-existing-regret}
 \end{figure}
 
@@ -2389,7 +2345,6 @@ Adaptive, which leaves memory addresses most intact, takes advantage of the natu
 \caption{PUT timings with \texttt{SYMBOL} \texttt{:EXISTING}.
 Prefuzz outperforms Murmur because it is faster to compute.
 The advantage of Co+Pr and Adaptive over Prefuzz comes almost exclusively from the initial Constant hash phase, with Adaptive enjoying a small edge due to its better regret at the very end.}
-\Description{}
 \label{fig:symbol-existing-put}
 \end{figure}
 
@@ -2428,7 +2383,6 @@ The advantage of Co+Pr and Adaptive over Prefuzz comes almost exclusively from t
 \end{tikzpicture}
 \caption{GET timings with \texttt{SYMBOL} \texttt{:EXISTING}.
 }
-\Description{}
 \label{fig:symbol-existing-get}
 \end{figure}
 
@@ -2466,7 +2420,6 @@ The advantage of Co+Pr and Adaptive over Prefuzz comes almost exclusively from t
   \end{axis}
 \end{tikzpicture}
 \caption{MISS timings with \texttt{SYMBOL} \texttt{:EXISTING}}
-\Description{}
 \label{fig:symbol-existing-miss}
 \end{figure}
 
@@ -2504,7 +2457,6 @@ The advantage of Co+Pr and Adaptive over Prefuzz comes almost exclusively from t
   \end{axis}
 \end{tikzpicture}
 \caption{DEL timings with \texttt{SYMBOL} \texttt{:EXISTING}}
-\Description{}
 \label{fig:symbol-existing-del}
 \end{figure}
 

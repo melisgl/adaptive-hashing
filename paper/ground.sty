@@ -12,14 +12,23 @@
 %
 %% - List seps are innefective. Go through enumitem?
 %
-%% - Propositions are followed by two blank lines.
+%% - Propositions that end with display math are followed by an extra
+%%   blank line. Actually, it works as intended but looks crap. What
+%%   happens is that the last line has some small descender, so when
+%%   grounding up, we get an almost empty line, plus the blank line
+%%   that follows the proposition.
+%
+%% - Maybe allow some (how much?) \prevdepth when rounding up. What
+%%   about to just setting \prevdepth to the remainder!
+%
+%% - \qedhere is lost when not grounding in a minipage
 
 \NeedsTeXFormat {LaTeX2e}
 \ProvidesPackage {ground}
 
 \newif\ifground@showframe\ground@showframefalse
 \DeclareOption{showframe}{\ground@showframetrue}
-\DeclareOption{showgrid}{\AtBeginDocument{\groundshowgrid}}
+\DeclareOption{showbaselines}{\AtBeginDocument{\groundshowbaselines}}
 \ProcessOptions
 
 
@@ -30,6 +39,7 @@
 \newcommand{\ground@cfbox}[2][green]{%
   \mbox{%
     \sbox{\ground@cfboxbox}{#2}%
+    % Change these after rendering #2.
     \setlength{\fboxsep}{-0.0001pt}% don't add space
     \setlength{\fboxrule}{0.0001pt}%
     \color{#1}%
@@ -38,19 +48,25 @@
 }
 
 \newcommand{\ground@maybeframe}[2][green]{%
-  \ifground@showframe
+  \ifground@showframe%
     \ground@cfbox[#1]{#2}%
-  \else
+  \else%
     #2%
+  \fi}
+
+\newcommand{\ground@mayberule}[1][blue]{%
+  \ifground@showframe%
+    % FIXME: The \hrule can change layout.
+    \color{#1}\hrule%
   \fi}
 
 
-%%%% The package option `showgrid` and \groundshowgrid draw the
-%%%% baselines in the text area on all pages. Helps debug alignment
-%%%% issues.
+%%%% The package option `showbaselines` and \groundshowbaselines draw
+%%%% the baselines in the text area on all pages. Helps debug
+%%%% alignment issues.
 
 \RequirePackage{atbegshi}
-\newcommand{\groundshowgrid}{%
+\newcommand{\groundshowbaselines}{%
   \AtBeginShipout{%
     \AtBeginShipoutUpperLeft{%
       \color{red!30}%
@@ -65,67 +81,96 @@
 \RequirePackage{xparse}
 \RequirePackage{xcolor}
 \RequirePackage{calc}
-\RequirePackage{ifthen}
+\RequirePackage{xifthen}
+\RequirePackage{etoolbox}
 
 \RequirePackage{expl3}
 \ExplSyntaxOn
 \cs_new_eq:NN \ground@fptodim \fp_to_dim:n
 \ExplSyntaxOff
 
-\def\groundprop{0.7}
+\def\groundprop{0.5}
 
 \newlength{\groundskip}
 \newlength{\ground@xxx}
 \newlength{\ground@spaceused}
 \newlength{\ground@correction}
-\newlength{\ground@spacerequired}
+\newlength{\ground@minipageheight}
 \newlength{\ground@remainingonpage}
 \newsavebox{\ground@box}
-\NewDocumentEnvironment {ground} {O{false} O{\groundprop} +b}
+\newtoks\groundbodytoks
+
+%% Two ways to ground:
+%%
+%% A. Set body normally, then add \vspace to round up the \pagetotal
+%%    to a multiple of \groundskip.
+%%
+%% B. Put body in a minipage, round up its height to a multiple
+%%    of \groundskip and distribute the required padding before and
+%%    and after the minipage in according to \groundprop.
+%%
+%% Floats are always always to be set on a minipage.
+%%
+%% Maybe there are ideas to steal from the column balancing code in
+%% https://mirrors.ctan.org/macros/latex/contrib/preprint/balance.dtx.
+\NewDocumentEnvironment {ground} {O{false} O{\groundprop} O{false} +b}
   {%
     \def\ground@topprop{#2}%
+    \def\ground@isfloat{#3}%
+    \groundbodytoks=\expandafter{#4}%
     \ifhmode\def\wasinhmode{1}\else\def\wasinhmode{0}\fi%
     \par%
-    % There can be negative prevdepths, but -1000pt means no interline
-    % glue, please.
+    %% There can be negative prevdepths, but -1000pt means
+    %% no \nointerlineskip, please.
     \ifdim \the\prevdepth=-1000pt%
       \setlength{\ground@spaceused}{0pt}%
     \else%
       \setlength{\ground@spaceused}{\the\prevdepth}%
     \fi%
-%%     % If at the top of the page, the line with prevdepth is on the
-%%     % previous page, in which case \ground@spaceused should be zero. I
-%%     % don't know how to do that, so let's just make it true.
-%%     \vspace{-\ground@spaceused} \vspace*{+\ground@spaceused}%
-    % Prevent glue, for example, after lines with no descenders.
-    \nointerlineskip\par%
-    \noindent%
+    \ground@savestate%
     \begin{lrbox}{\ground@box}%
       \begin{minipage}{\linewidth}%
-        \nointerlineskip\par #3}
+        \the\groundbodytoks}
   {   \end{minipage}%
     \end{lrbox}%
-    \setlength{\ground@spacerequired}{\ht\ground@box + \dp\ground@box}%
-    \ground@setremainingonpage{}%
-    \ifdim \ground@spacerequired > \ground@remainingonpage%
-      % Setting #3 without the minipage so that it can be broken
-      % across pages would be the right thing to do, but it doesn't
-      % compile.
-      %% #3\par\touchground%
-      %% \setlength{\prevdepth}{0pt}%
-      \ground@maybeframe{\usebox\ground@box}%
-      \setlength{\ground@spaceused}{
-        \ground@fptodim{\ht\ground@box + \dp\ground@box}}%
-      \setlength{\ground@correction}{
-        \ground@fptodim{
-          % The 0.00001 is intended to avoid skipping an extra line due
-          % to floating point inaccuracy.
-          ceil(\ground@spaceused / \groundskip - 0.00001) * \groundskip
+    \setlength{\ground@minipageheight}{\ht\ground@box + \dp\ground@box}%
+    %% KLUDGE: Force \pagetotal to be updated without, hopefully, any
+    %% other effect. This is necessary, for example, on the first line
+    %% of the page.
+    \noindent\par
+    %% For floats, \ground@setremainingonpage is not to be trusted. It
+    %% seem to work most of the time, which makes it quite insidious.
+    \ifthenelse{\boolean{\ground@isfloat}}
+               {\setlength{\ground@remainingonpage}{\textheight}}
+               {\ground@setremainingonpage{}}
+    \ifthenelse{\lengthtest{\ground@minipageheight > \ground@remainingonpage}}{%
+      {% The minipage would not fit on the current page / column.
+        %% Without this, display math uses the text mode \lineskip
+        %% which is \groundskip. Why?
+        \setlength{\lineskip}{1pt}%
+        \ground@restorestate%
+        \par%
+        %% All those \par commands lead to an extra blank line when at
+        %% the top of the page.
+        \vspace{\baselineskip}%
+        \vspace*{-\baselineskip}%
+        \par%
+        \the\groundbodytoks%
+        %% Update \pagetotal
+        \par}%
+      \setlength{\ground@spaceused}{\pagetotal}%
+      \setlength{\ground@correction}{%
+        \ground@fptodim{%
+          % The 0.00001 is intended to avoid skipping an extra line
+          % due to floating point inaccuracy. FIXME: Actually, I had
+          % to bump it to 0.05 as a bandaid for extra blank lines.
+          ceil(\ground@spaceused / \groundskip - 0.05) * \groundskip%
                - \ground@spaceused}}%
-      \vspace*{\ground@correction}%
-    \else%
-      % The minipage will fit on the page. Make sure that the
-      % correction doesn't push it over.
+      \ground@mayberule%
+      \vspace{\ground@correction}%
+      %% \the\ground@spaceused, \the\ground@minipageheight, \the\pagegoal, \the\ground@remainingonpage, \the\ground@correction, \the\textheight, \the\pagetotal,
+    }{% The minipage does fit on the current page / column.
+      %% Make sure that the correction doesn't push it over.
       \setlength{\ground@spaceused}{
         \ground@fptodim{\ground@spaceused + \ht\ground@box + \dp\ground@box}}%
       \setlength{\ground@correction}{
@@ -134,25 +179,33 @@
           % to floating point inaccuracy.
           ceil(\ground@spaceused / \groundskip - 0.00001) * \groundskip
                - \ground@spaceused}}%
-      \setlength{\ground@correction}{
+      \setlength{\ground@correction}{%
         \ground@fptodim{min(\ground@correction, \ground@remainingonpage
-                                                - \ground@spacerequired)}}%
-      \setlength{\ground@xxx}
-                {\ground@fptodim{\ground@correction*\ground@topprop}}%
-%%       \the\ground@xxx, \the\ground@correction, \the\ground@remainingonpage, \the\ground@spacerequired, \the\textheight, \the\pagetotal, \the\pagegoal
+                                                - \ground@minipageheight)}}%
+      \setlength{\ground@xxx}{\ground@fptodim{\ground@correction*\ground@topprop}}%
+      %% \the\ground@xxx, \the\ground@correction, \the\ground@remainingonpage, \the\ground@minipageheight, \the\textheight, \the\pagetotal, \the\pagegoal
       \vspace*{\ground@xxx}\par\nointerlineskip\noindent%
-      \ground@maybeframe{\usebox\ground@box}%
-      \setlength{\ground@xxx}{\ground@fptodim{
-          \ground@correction*(1-\ground@topprop)}}%
+      \ifthenelse{\boolean{\ground@isfloat}}%
+                 {\ground@maybeframe[red]{\usebox\ground@box}}%
+                 {\ground@maybeframe[green]{\usebox\ground@box}}%
+      \setlength{\ground@xxx}{\ground@fptodim{\ground@correction*(1-\ground@topprop)}}%
       \vspace{\ground@xxx}%
-    \fi
-    \par\setlength{\prevdepth}{0pt}%
-    \ifnum\wasinhmode=1 \noindent\ignorespacesafterend \fi}
+    }
+  \par\setlength{\prevdepth}{0pt}%
+  \ifnum\wasinhmode=1 \noindent\ignorespacesafterend \fi}
+
+%% Since we typeset body twice sometimes (if it has to be broken over
+%% pages/columns), equation numbering can skip numbers. Patch that up.
+%% The same label is still generated twice, but it seems to cause no
+%% problems.
+\newcounter{equationsave}
+\newcommand\ground@savestate{\setcounter{equationsave}{\theequation}}
+\newcommand\ground@restorestate{\setcounter{equation}{\theequationsave}}
 
 \NewDocumentCommand {\ground@setremainingonpage} {} {%
   % https://tex.stackexchange.com/questions/669361/problem-with-pagegoal
-  \ifdim \pagegoal = \maxdimen%
-    \setlength{\ground@remainingonpage}{\textheight-\pagetotal}%
+  \ifdim \pagetotal = \maxdimen%
+    \setlength{\ground@remainingonpage}{\textheight}%
   \else%
     \setlength{\ground@remainingonpage}{\pagegoal-\pagetotal}%
   \fi%
@@ -161,6 +214,7 @@
 \newlength{\proofsep}
 \newcommand{\groundlevel}[1][\baselineskip]{
   \setlength{\groundskip}{#1}
+  \setlength{\columnsep}{\ground@fptodim{2*\groundskip}}
   \setlength{\parskip}{0pt}
   \setlength{\parindent}{\groundskip}
   \setlength{\topskip}{\groundskip}
@@ -168,20 +222,19 @@
   \setlength{\itemsep}{0pt}
   \setlength{\parsep}{0pt}
   \setlength{\partopsep}{\groundskip}
-  \setlength{\abovedisplayskip}{0\groundskip}
+  \setlength{\abovedisplayskip}{0.25\groundskip}
   \setlength{\belowdisplayskip}{0\groundskip}
-  \setlength{\abovedisplayshortskip}{0pt}
-  \setlength{\belowdisplayshortskip}{0pt}
+  \setlength{\abovedisplayshortskip}{0.25\groundskip}
+  \setlength{\belowdisplayshortskip}{0\groundskip}
   \setlength{\textfloatsep}{1\groundskip}
   \setlength{\floatsep}{1\groundskip}
   \setlength{\intextsep}{1\groundskip}
   \setlength{\dbltextfloatsep}{\groundskip}
   \setlength{\dblfloatsep}{\groundskip}
-%%   \setlength{\lineskiplimit}{-\maxdimen}
+  \setlength{\lineskiplimit}{0pt}
   \setlength{\lineskip}{\groundskip}
   \setlength{\bibsep}{\groundskip}
-%%   % No need to set this.
-%%   % \setlength{\jot}{0pt}
+  \setlength{\jot}{0.33\groundskip}
   \setlength{\proofsep}{0\groundskip}
   \def\thm@space@setup{%
     \thm@preskip=\groundskip
@@ -195,46 +248,130 @@
 }
 
 
-\NewDocumentCommand {\buryinground} {O{false} O{\groundprop} m}{%
-  \BeforeBeginEnvironment{#3}{\begin{ground}[#1][#2]}
-  \AfterEndEnvironment{#3}{\end{ground}}}
+\usepackage{algorithm}
+%% \usepackage[noend]{algpseudocode}
+%% \usepackage{algorithmicx}
+\RequirePackage{environ}
+
+\NewDocumentCommand {\buryinground} {O{false} O{\groundprop} O{false} m m}{%
+  \NewEnvironmentCopy{#5}{#4}%
+  \RenewDocumentEnvironment{#4}{+b}
+    {\begin{ground}[#1][#2][#3]%
+        \begin{#5}##1\end{#5}%
+    \end{ground}}
+    {\ignorespacesafterend}}
+
+\NewDocumentCommand {\burydisplaymathinground} {O{false} O{\groundprop} O{false} m m}{%
+  \NewEnvironmentCopy{#5}{#4}%
+  \RenewDocumentEnvironment{#4}{+b}
+    {\begin{ground}[#1][#2][#3]%
+        \setbox\strutbox\hbox{%
+          \vrule\@height0.\baselineskip
+          \@depth0.\baselineskip
+        \@width\z@}%
+        \setlength{\baselineskip}{0pt}%
+        \begin{#5}##1\end{#5}%
+        \setlength{\baselineskip}{\groundskip}%
+        %% Without this \belowdisplayshortskip would not have any
+        %% effect at the end of a minipage. FIXME: Unfortunately, this
+        %% causes almost a line to be skipped sometimes.
+        %% \vspace{0pt}%
+    \end{ground}}
+    {\ignorespacesafterend}}
 
 \RequirePackage{amsmath}
+\RequirePackage{amsthm}
+\RequirePackage{xpatch}
+\xpatchcmd{\proof}{\topsep 6\p@ \@plus 6\p@ \relax}
+          {\topsep \proofsep}
+          {}
+          {\PackageError{ground}{Failed to patch \proof.}{}}
 
-\buryinground{equation}
-\buryinground[true]{equation*}
-\buryinground{align}
-\buryinground[true]{align*}
-\buryinground{gather}
-\buryinground[true]{gather*}
+%% \burydisplaymathinground{equation}
+\burydisplaymathinground[true]{equation*}{ungroundedeqationstar}
+%% \burydisplaymathinground{align}
+\burydisplaymathinground[true]{align*}{ungroundedalignstar}
+%% \burydisplaymathinground{flalign}
+\burydisplaymathinground[true]{flalign*}{ungroundedflalignstar}
+%% \burydisplaymathinground{gather}
+\burydisplaymathinground[true]{gather*}{ungroundedgatherstar}
+
+%% Make \qedhere work properly (aligned right) and prevent a warning.
+%% FIXME: \qedhere is lost when the display math it's in crosses a
+%% column break.
+\def\ungroundedequationstar@qed{\align@qed}
+\def\ungroundedalignstar@qed{\align@qed}
+\def\ungroundedgatherstar@qed{\align@qed}
 
 %% Float environments must be top-level. Inject the ground environment
 %% instead instead of wrapping them.
 
-\RequirePackage{algorithm}
-\RequirePackage{environ}
-\RequirePackage{etoolbox}
+\RequirePackage{xstring}
+
+\newcommand\maybecapstart{}
 
 \NewDocumentCommand {\floatground} {O{false} O{\groundprop} m}{%
   \NewEnviron{ground@#3}[1][t]{%
-    \@float{#3}[##1]
-      \let\xBODY\BODY
-      \begin{ground}[#1][#2]
-        \xBODY
-      \end{ground}
-    \end@float}
+    % Check if the argument is exactly "H"
+    \IfStrEq{##1}{H}{%
+      % === CASE [H]: Do not float ===
+      \par\noindent
+      \begin{minipage}{\linewidth} % Keep content together
+        %% Tell standard \caption that we are in a '#3'.
+        \def\@captype{#3}%
+        \let\xBODY\BODY
+        \begin{ground}[#1][#2][true]
+          \xBODY
+        \end{ground}
+      \end{minipage}
+      \par
+    }{%
+      % === CASE [t/b/p]: Use standard float ===
+      \@float{#3}[##1]
+        \maybecapstart
+        \let\xBODY\BODY
+        \begin{ground}[#1][#2][true]
+          %% KLUDGE: Align top of the float roughly to the top of the
+          %% normal line of text.
+          \vspace{0.4\groundskip}
+          \xBODY
+        \end{ground}
+      \end@float
+    }%
+  }%
   \renewenvironment{#3}
                    {\csuse{ground@#3}}
                    {\csuse{endground@#3}}}
 
 \NewDocumentCommand {\dblfloatground} {O{false} O{\groundprop} m m}{%
   \NewEnviron{ground@#3star}[1][t]{%
-    \@dblfloat{#3}[##1]
-      \let\xBODY\BODY
-      \begin{ground}[#1][#2]
-        \xBODY
-      \end{ground}
-    \end@dblfloat}
+    % Check if the argument is exactly "H"
+    \IfStrEq{##1}{H}{%
+      % === CASE [H]: Do not float ===
+      \par\noindent
+      \begin{minipage}{\linewidth} % Keep content together
+        %% Tell standard \caption that we are in a '#3'.
+        \def\@captype{#3}%
+        \let\xBODY\BODY
+        \begin{ground}[#1][#2][true]
+          \xBODY
+        \end{ground}
+      \end{minipage}
+      \par
+    }{%
+      % === CASE [t/b/p]: Use standard float ===
+      \@dblfloat{#3}[##1]
+        \maybecapstart
+        \let\xBODY\BODY
+        \begin{ground}[#1][#2][true]
+          %% KLUDGE: Align top of the float roughly to the top of the
+          %% normal line of text.
+          \vspace{0.4\groundskip}
+          \xBODY
+        \end{ground}
+      \end@dblfloat
+    }%
+  }%
   \renewenvironment{#4}
                    {\csuse{ground@#3star}}
                    {\csuse{endground@#3star}}}
@@ -260,4 +397,10 @@
   }{%
     \popQED\endtrivlist\@endpefalse
   }
+}
+
+\AtBeginDocument{
+  \@ifpackageloaded{hypcap}{%
+    \renewcommand\maybecapstart{\capstart}%
+  }{}
 }

@@ -6,7 +6,33 @@
 
 \RequirePackage[UKenglish]{babel}
 \renewcommand\UKenglishhyphenmins{22}
+\hyphenpenalty=0
 \frenchspacing
+
+
+%%%% Profiling per page
+
+%% \RequirePackage{atbegshi}
+%% \newcommand\showtimer{%
+%%   \message{^^Jtimer: \the\numexpr\the\pdfelapsedtime*1000/65536\relax}%
+%%   \pdfresettimer}
+%% \AtBeginDocument{\showtimer}
+%% \AtBeginShipout {\showtimer}
+
+
+%%%% amsthm must be loaded before cleveref and newtxmath
+
+\@ifpackageloaded{amsmath}
+  {}
+  {%
+    \@ifpackageloaded{cleveref}
+      {\PackageError{Do not load cleveref before amsmath.}}
+      {}
+    \@ifpackageloaded{newtxmath}
+      {\PackageError{Do not load newtxmath before amsmath.}}
+      {}
+    \RequirePackage{amsmath}}
+\RequirePackage{amsthm}
 
 
 %%%% Spacing
@@ -16,19 +42,26 @@
 \ifnum \debuglayout = 1
   % Mark overfull boxes in output
   \setlength{\overfullrule}{5pt}
-  \RequirePackage{showframe}
-  \RequirePackage[showframe,showgrid]{ground}
+  \RequirePackage[showframe,showbaselines]{ground}
   %% \RequirePackage{lua-visual-debug}
 \else
   \RequirePackage{ground}
-%%   % Without the ground package
-%%   \newcommand{\groundskip}{\baselineskip}
-%%   \newcommand{\groundlevel}{}
+  %% % Without the ground package
+  %% \newcommand{\groundskip}{\baselineskip}
+  %% \newcommand{\groundlevel}{}
+  %% \RequirePackage{expl3}
+  %% \ExplSyntaxOn
+  %% \cs_new_eq:NN \ground@fptodim \fp_to_dim:n
+  %% \ExplSyntaxOff
+  %% \NewDocumentEnvironment {ground} {O{false} O{\groundprop} +b} {#3} {}
 \fi
 
 \RequirePackage{ifxetex}
+\RequirePackage{ifdraft}
 \ifpdftex
-  \RequirePackage[spacing=true]{microtype}
+  \ifdraft%
+      {\newcommand\textls[2][]{#2}}%
+      {\RequirePackage[spacing=true]{microtype}}
 \else
   \RequirePackage{microtype}
 \fi
@@ -36,22 +69,33 @@
 
 \RequirePackage[verbose=true,letterpaper]{geometry}
 \AtBeginDocument{
-  %% FIXME: narrower for onecolumn. A4?
+  %% This works for both Letter paper (8.5 x 11 inches) and A4 (8.27 x
+  %% 11.7 inches), but two columns look much better on Letter in
+  %% general.
   \newgeometry{
-    % textheight = paperwidth
-    textheight=8.5in,
-    % textwidth/paperwidth = textheight/paperheight
-    textwidth=6.57in,
-    top=1.25in,
-    headheight=12pt,
-    headsep=25pt,
-    footskip=30pt
+    % textheight ~= paperwidth. KLUDGE: Slightly less to minimize
+    % blank space below the last grounded line at the current
+    % groundskip setting (which depends on the font size). Without
+    % this kludge, stuff like display math and footnotes may visibly
+    % extend much further down than normal text.
+    textheight=8.45in,
+    % This is paperwidth * 4/5 for Letter and * ~5/6 for A4.
+    textwidth=6.8in,
+    top=(\paperheight-8.45in)/2,
+    footskip=\ground@fptodim{3*\groundskip},
+    % We don't use these. Set them to 0 so that "Trim to Margins"
+    % works better in PDF viewers.
+    headheight=0pt,
+    headsep=0pt,
+    marginparwidth=0pt,
+    marginparsep=0pt,
   }
-  \setlength{\columnsep}{\ground@fptodim{1.5*\groundskip}}
+  \setlength{\columnsep}{\ground@fptodim{2*\groundskip}}
 }
 
-\widowpenalty=10000
-\clubpenalty=10000
+%% \widowpenalty=10000
+%% \clubpenalty=10000
+%% \interfootnotelinepenalty=0
 
 
 %%%% Document title
@@ -60,20 +104,27 @@
 
 \RequirePackage{titling}
 
-%% https://tex.stackexchange.com/questions/130762/prl-style-horizontal-line-in-latex
-\newcommand{\PRLsep}{\noindent\makebox[\linewidth]{\resizebox{0.33\linewidth}{1pt}{$\bullet$}}}
+% https://tex.stackexchange.com/questions/130762/prl-style-horizontal-line-in-latex
+\newcommand{\PRLsep}{%
+  \noindent%
+  \resizebox{0.4\linewidth}{0.1em}{$\bullet$}}
 
 \def\@maketitle{%
   \newpage
   \null
   \begin{ground}
-    {\centering \fontsize{16pt}{24pt} \titlefont \textls[100]{\MakeUppercase{\@title}} \par}
+    % The numbers are tuned so that the title has \textwidth.
+    {\centering \fontsize{16pt}{24pt} \titlefont \textls[108]{\fontdimen2\font=1.08ex\MakeUppercase{\@title}} \par}
     \ifdef{\@subtitle}
-          {\vspace*{0.5\groundskip} \centering \PRLsep \vspace*{0.5\groundskip} \par \fontsize{13pt}{18pt} \titlefont \@subtitle \par}
+          {\vspace*{0.5\groundskip} \centering \PRLsep \vspace*{0.5\groundskip} \par \fontsize{13pt}{18pt} \titlefont { \textls[10]{\fontdimen2\font=0.8ex\@subtitle}} \par}
           {}
     {\vspace*{2\groundskip}\centering\fontsize{11pt}{14pt}\titlefont \@author \par}
   \end{ground}
   \vspace*{3\groundskip}}
+
+\newcommand\authorname[1]{\fontsize{12pt}{14pt}\titlefont \textls[10]{\fontdimen2\font=0.8ex \itshape #1}}
+\newcommand\authoremail[1]{\texttt{\normalsizerrr #1}}
+\newcommand\authororg[1]{\textls[10]{\normalsizerrr #1}}
 
 
 %%%% Abstract
@@ -129,24 +180,34 @@
 
 
 \titleformat{\section}[block]
-            {\normalfont\normalsize}
-            {{\sc\MakeLowercase{\thesection}}}
-            {12pt}
-            {{\sc\normalsize\textls[100]{\MakeLowercase{#1}}}}
+            % Setup common to title label and title body (e.g "1.2 Body")
+            {\normalfont\normalsize\scshape}
+            % Label (may contain normal letters, e.g in the appendix);
+            % hence the lowercasing. Also, the parbox makes the title
+            % body have an indent matching paragraph and list indent.
+            {\parbox{\groundskip}{\MakeLowercase{\thesection}}}
+            % Horizontal space after the label and before the body
+            {0pt}
+            % Emit the body given as #1 (due to the explicit option above)
+            {\textls[80]{\fontdimen2\font=0.7ex\MakeLowercase{#1}}}
 \titlespacing*{\section}{0pt}{\groundskip}{\groundskip}
 
 
 \titleformat{\subsection}[block]
             {\normalfont\normalsize}
-            {{\sc\MakeLowercase{\thesubsection}}}
-            {12pt}
+            % Reduce the size of "A" in "A.1" by setting it in
+            % smallcap lowercase.
+            {\scshape\MakeLowercase{\thesubsection}}
+            % Approximately match the space between the label and the
+            % title body in section titles.
+            {0.7\groundskip}
             {\emph{#1}}
 \titlespacing*{\subsection}{0pt}{\groundskip}{\groundskip}
 
 \titleformat{\subsubsection}[block]
             {\normalfont\normalsize}
-            {{\sc\MakeLowercase{\thesubsubsection}}}
-            {12pt}
+            {\sc\MakeLowercase{\thesubsubsection}}
+            {0.7\groundskip}
             {#1}
 \titlespacing*{\subsubsection}{0pt}{\groundskip}{\groundskip}
 
@@ -184,19 +245,16 @@
               {}
               {\mgltocpage}
 
-%https://tex.stackexchange.com/questions/121879/remove-spacing-between-per-chapter-figures-in-lof
-\RequirePackage{etoolbox}% http://ctan.org/pkg/etoolbox
-\makeatletter
+% https://tex.stackexchange.com/questions/121879/remove-spacing-between-per-chapter-figures-in-lof
 % \patchcmd{<cmd>}{<search>}{<replace>}{<succes>}{<failure>}
 \patchcmd{\@chapter}{\addtocontents{lof}{\protect\addvspace{10\p@}}}{}{}{}% LoF
 \patchcmd{\@chapter}{\addtocontents{lot}{\protect\addvspace{10\p@}}}{}{}{}% LoT
-\makeatother
 
-% Include the bibliography in the table of contents.
+%% Include the bibliography in the table of contents.
 \RequirePackage[nottoc,notlot,notlof]{tocbibind}
 
-% Some numbered subsections are just not important enough to include
-% them in the toc.
+%% Some numbered subsections are just not important enough to include
+%% them in the toc.
 \newcommand{\nocontentsline}[3]{}
 \newcommand{\tocless}[2]{\bgroup\let\addcontentsline=\nocontentsline#1{#2}\egroup}
 
@@ -248,10 +306,12 @@
   {\centering\includegraphics[height=2\groundskip]{#1}\par}}
 
 
-%%%% Fonts (lots of options)
+%%%% Fonts (with some options)
 
 \RequirePackage[utf8]{inputenc}
 \RequirePackage{setspace}
+
+\newcommand\narrowslash{/}
 
 %% % Times
 %% \RequirePackage[p,osf]{newtx}
@@ -262,30 +322,68 @@
 %% %% \baselineskip 12pt: (/ 12 10 1.208) = 0.99337
 %% \setstretch{0.99337}
 
+%% % Libertinus font
+%% \RequirePackage[p,osf]{libertinus}
+%% \RequirePackage[fontsize=10.20pt]{fontsize}
+%% \setstretch{0.9438}
+%% %% \RequirePackage[fontsize=12.5874pt]{fontsize}
+%% %% \setstretch{1.18343}
+%% \RequirePackage[libertine,vvarbb]{newtxmath}
+%% \let\openbox\relax
+%% \newcommand{\fontloversize}{0.08}
+
+%% % Cochineal = Recent Crimson font (=Amari?) with fixes, extensions
+%% \RequirePackage[p,osf]{cochineal}
+%% %% \RequirePackage[fontsize=12.47003pt]{fontsize}
+%% \RequirePackage[fontsize=10.5633pt]{fontsize}
+%% \setstretch{1.05}
+%% \RequirePackage[varqu,varl,var0,scale=0.93]{inconsolata}
+%% \RequirePackage[scale=.95,type1]{cabin}
+%% \RequirePackage[cochineal,vvarbb]{newtxmath}
+%% \RequirePackage[cal=boondoxo]{mathalfa}
+%% \let\openbox\relax
+%% % (/ 12.67603 13.23523 1.02) = 0.93896973
+%% \RequirePackage[p,osf,scaled=0.93896973]{ebgaramond}
+%% \renewcommand{\titlefont}{\ebgaramond}
+%% \renewcommand{\titleliningnums}[1]{{\liningnums{#1}}}
+%% \newcommand{\fontloversize}{0.13}
+
 % XCharter
 \ifpdftex
-  % With pdflatex, otfmath is not supported.
+  % With pdflatex, unicode-math is not supported.
   \RequirePackage[osf,scosf]{XCharter}
   % Hack for Arxiv, which has an old XCharter.
   \ifdef{\useproportional}{\useproportional}{}
-  \RequirePackage[charter,smallerops,varbb,scaled=1.05]{newtxmath}
-  \RequirePackage[cal=cm]{mathalfa}
+  \RequirePackage[charter,smallerops,subscriptcorrection,
+    varbb,scaled=1.05]{newtxmath}
+  \DeclareMathAlphabet{\mathbfit}{T1}{bch}{b}{it}
+  \RequirePackage[cal=cm,calscaled=0.93]{mathalfa}
   % (* (/ 13.5 12) (/ 11.2265 12)) = 1.0524843
   \RequirePackage[p,osf,scaled=1.0524843]{ebgaramond}
 \else
   \RequirePackage[no-math]{fontspec}
   % (* (/ 13.5 12) (/ 11.2265 12)) = 1.0524843
   \RequirePackage[p,osf,scaled=1.0524843]{ebgaramond}
-  \RequirePackage[xcharter,p,osdf,scosf,smallerops,varbb,mathscale=1.05]{newtx}
+  \RequirePackage[xcharter,p,osdf,scosf,smallerops,subscriptcorrection,
+    varbb,mathscale=1.05]{newtx}
 \fi
 \renewcommand{\titlefont}{\ebgaramond}
+%% Charter has a very wide slash that looks terrible in A/B and I/O.
+\renewcommand\narrowslash{%
+  \raisebox{0.12em}{%
+    \resizebox{0.35em}{0.58em}{%
+      \kern0.08em%
+      \reflectbox{$\bm\setminus$}}}}
 \RequirePackage{letltxmacro}
 \LetLtxMacro\titleliningnums\liningnums
-%% \renewcommand{\titleliningnums}[1]{{\liningnums{#1}}}
-% This has the same x-height as 10pt Times New Roman.
-\RequirePackage[fontsize=9.355416pt]{fontsize}
-%% \baselineskip 12pt: (/ 12 9.355416 1.208)
-\setstretch{1.061820750080711}
+% This has the same space usage as 10pt Times New Roman.
+\RequirePackage[fontsize=9.2833pt]{fontsize}
+%% \baselineskip: Times would have 12pt: (* (/ 17.86 18) (/ 12 9.283 1.208))
+\setstretch{1.0689}
+%% % This has the same x-height as 10pt Times New Roman.
+%% \RequirePackage[fontsize=9.355416pt]{fontsize}
+%% %% \baselineskip 12pt: (/ 12 9.355416 1.208)
+%% \setstretch{1.0618}
 
 
 %%%% Misc
@@ -307,11 +405,14 @@
 \NoIndentAfterEnv{proposition}
 \NoIndentAfterEnv{corollary}
 \NoIndentAfterEnv{lemma}
+\NoIndentAfterEnv{approximation}
 \NoIndentAfterEnv{assumption}
+\NoIndentAfterEnv{remark}
+\NoIndentAfterEnv{example}
 \NoIndentAfterEnv{restatable}
 
 
-% Smaller bullets with hack for Arxiv
+%% Smaller bullets with hack for Arxiv
 \ifdef{\tinyrrr}
       {\newlength{\mylen}
         \setbox1=\hbox{$\bullet$}\setbox2=\hbox{\tinyrrr$\bullet$}
@@ -323,22 +424,19 @@
         \renewcommand\labelitemi{\raisebox{\mylen}{\scriptsize$\bullet$}}}
 
 
-%%%% amsthm must be loaded before cleveref
+%%%% Citations, links, references, footnotes
 
-\usepackage{mathtools}
-\let\openbox\relax
-\usepackage{amsthm}
-
-
-%%%% Citations, links, references
-
-\usepackage[authoryear]{natbib}
-\usepackage[hidelinks,linktoc=all]{hyperref}
+\RequirePackage[authoryear]{natbib}
 \DeclareTextFontCommand{\textin}{\initials}
-\usepackage{url}            % simple URL typesetting
+\RequirePackage{url}            % simple URL typesetting
 
-\usepackage[nameinlink]{cleveref}
-\Crefformat{chapter}{\S#2\scshape{\MakeLowercase{#1}}#3}
-\Crefformat{section}{\S#2\scshape{\MakeLowercase{#1}}#3}
-\Crefformat{subsection}{\S#2\scshape{\MakeLowercase{#1}}#3}
-\Crefformat{subsubsection}{\S#2\scshape{\MakeLowercase{#1}}#3}
+\AtBeginDocument{
+  \@ifpackageloaded{cleveref}{%
+    \Crefformat{chapter}{\S#2\scshape{\MakeLowercase{#1}}#3}
+    \Crefformat{section}{\S#2\scshape{\MakeLowercase{#1}}#3}
+    \Crefrangeformat{section}{\S#3#1#4--#5#2#6}
+    \Crefmultiformat{section}{\S#2#1#3}{ and~ \S#2#1#3}{, \S#2#1#3}{ and~ \S#2#1#3}
+    \Crefformat{subsection}{\S#2\scshape{\MakeLowercase{#1}}#3}
+    \Crefformat{subsubsection}{\S#2\scshape{\MakeLowercase{#1}}#3}
+  }{}
+}

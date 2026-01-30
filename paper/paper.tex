@@ -261,13 +261,13 @@ At that scale, even small gains in this area can have huge impact.
 This work aims to provide a general framework to improve the performance of hash tables in practice.
 Theory mostly concerns itself with the unknown key distribution setting and the cost of key lookup abstracted as the number of key comparisons required.
 This approach is highly successful due to its wide applicability and being a reasonable model \emph{asymptotically} for a certain class of hash functions.
-However, practice stubbornly happens in the non-asymptotic regime with particular key distributions (even concrete keys) on computers with memory caches.
+However, practice stubbornly happens in the non-asymptotic regime with particular keys on computers with memory caches.
 We propose a method to equip hash tables with the ability to change their hash function based on the keys being added to improve their overall performance by bucketing the keys more evenly, making the hash function faster or more cache-friendly.
 We are not aware of a cost model that incorporates these effects and is amenable to theoretical analysis, hence this work tilts heavily towards Experimental Algorithmics \citep{moret1999towards}.
 
 \begin{algorithm}[t]
   \caption{\small Sketch of a possible adaptation mechanism implemented in $\mathit{put}$ with low overhead.
-The unchanged parts of a simple $\mathit{put}$ implementation are \textcolor{gray!100}{grayed out}.
+The unchanged parts of a simple $\mathit{put}$ implementation are \textcolor{gray!100}{grayed out}, while extension points are marked in \textcolor{mglred}{red}.
 The hash function \emph{hash\_fn} may be adapted when there are too many keys in the same bucket, or when rehashing finds that the number of collisions is too high.
 Alternatively, the total cost of access (\Cref{def:cost-of-hashes}) could be tracked, requiring an additional write to memory and also a performance penalty to key deletion.}
   \label{alg:puthash}
@@ -289,9 +289,9 @@ Alternatively, the total cost of access (\Cref{def:cost-of-hashes}) could be tra
         \color{gray!100}
       \EndFor
       \color{black}
-      \If{$\mathit{chain\_length}$ too high}
-        \Let{$\operatorname{hash\_fn}$}{$\operatorname{safer\_hash\_function}(\operatorname{hash\_fn})$}
-        \State{$\operatorname{rehash\_and\_maybe\_adapt}()$}
+      \If{$\mathit{chain\_length}$ \textcolor{mglred}{too high}}
+        \Let{$\operatorname{hash\_fn}$}{$\textcolor{mglred}{\operatorname{safer\_hash\_function}}(\operatorname{hash\_fn})$}
+        \State{$\operatorname{rehash\textcolor{mglred}{\_and\_maybe\_adapt}}()$}
         \Let{$\mathit{bucket}$}{$\operatorname{hash\_fn}(\mathit{key}) \bmod m$}
       \EndIf
       \color{gray!100}
@@ -299,7 +299,7 @@ Alternatively, the total cost of access (\Cref{def:cost-of-hashes}) could be tra
         \State{double $m$ and increase storage}
         \color{black}
         \State{$\textcolor{gray}{%
-            \operatorname{rehash\textcolor{black}{\_and\_maybe\_adapt}}()}$}
+            \operatorname{rehash\textcolor{mglred}{\_and\_maybe\_adapt}}()}$}
         \If{$\operatorname{hash\_fn}$ was changed}
           \Let{$\mathit{bucket}$}{$\operatorname{hash\_fn}(\mathit{key}) \bmod m$}
         \EndIf
@@ -319,32 +319,25 @@ While selecting the hash function offline amortizes the design cost, it also att
 A less rigid solution is to select a hash function \emph{online} given the actual keys in the hash table.
 This pulls the hash function selection cost into the runtime realm, and we must be extremely cautious of introducing overhead lest any possible gains be wasted.
 Here, we propose hiding some of the selection cost in rehashing, when the hash table grows.
+To ground the exposition, \Cref{alg:puthash} sketches the implementation of a possible adaptation mechanism.
+In later sections, we flesh out this skeletal algorithm by instantiating the logic behind the extension points marked in red for deciding when the chain length is considered too high, the fallback mechanism to a safer hash, and the adaptation in rehash.
+
 In summary, our main contributions are:
 \begin{itemize}
-\item On the conceptual level, we argue that hash functions must be able to change during the lifetime of a hash table for best performance.
-\item We propose a light-weight adaptation mechanism tailored to string and integer/pointer hashing.
-\item We empirically demonstrate performance gains in a real-life hash table implementation.\footnote{
-The proposed algorithms were implemented within SBCL \citep{newman1999sbcl}, a high-quality Common Lisp.
-SBCL hash tables are reasonably fast given the constraints of the ANSI standard \citep{steele1990common} but not close to the state of the art.
-We microoptimized the baseline SBCL v2.4.2 to make performance comparisons fairer.}
+\item We argue that hash functions must adapt to the keys in the hash table for best performance.
+In \Cref{sec:the-case-for-adaptive-hashing}, we quantify the theoretical cost ignoring the actual keys.
+\item We propose a light-weight adaptation mechanism tailored to string hashing and achieve large gains by ensuring that the hash function performs only the minimum work necessary in \Cref{sec:half-an-example}.
+\item We propose a robust solution for integer/pointer keys that simultaneously achieves faster hashing and fewer collisions in \Cref{sec:pointer-keys}.
 \end{itemize}
-
-%% The overall structure of this paper is as follows.
-%% In \Cref{sec:the-case-for-adaptive-hashing}, we argue that the hash functions in common use are suboptimal in terms of collisions because they ignore the actual distribution of keys.
-%% Then, in \Cref{sec:half-an-example}, we demonstrate on string hashing how much there is to gain by adapting the hash function to the data even if the number of collisions is not reduced.
-%% Finally, \Cref{sec:pointer-keys} provides an example with integer/pointer keys of how to achieve fewer collisions with faster hash functions in a robust solution.
-To ground the exposition, \Cref{alg:puthash} sketches the implementation of a possible adaptation mechanism.
-In later sections, we flesh out this skeletal algorithm.
+The proposed algorithms were implemented within SBCL \citep{newman1999sbcl}, a high-performance Common Lisp.
+SBCL hash tables are reasonably fast given the constraints of the ANSI standard \citep{steele1990common} but not state of the art.
+We microoptimized the baseline SBCL v2.4.2 to make performance comparisons fairer.
 
 
 \section{The Case for Adaptive Hashing}
 \label{sec:the-case-for-adaptive-hashing}
 
-In this section, we present the traditional cost model for lookup in hash tables, which is based on the number of comparisons, then characterize how much being key-agnostic costs in these terms.
-
-%% Throughout this paper, we work with plain hash tables, which have a number of buckets and keys are assigned to buckets with the help of a hash function.
-%% If multiple keys are assigned to the same bucket, then a lookup must perform a trivial search with expected cost that's linear in the number keys in the bucket.
-
+In this section, we present the traditional cost model in hash tables, based on the number of comparisons, then characterize how much being key-agnostic costs in these terms.
 We denote the number of buckets with $m$, the number of keys with $n$, the keys (assumed to be integers) with $k$, hash values with $h \in \natnumzero$, buckets with $b \in [0,m-1]$, and say that hash $h$ falls into bucket $b$ if $h \bmod m = b$.
 We write $h_{1:n}$ to refer to a vector of a certain size.
 
@@ -352,7 +345,7 @@ We write $h_{1:n}$ to refer to a vector of a certain size.
 For a given set of hash values $h_{1:n}$ and $m$ buckets, we denote the bucket count vector with $c(h_{1:n}, m) \in (\natnumzero)^m$, where $c(h_{1:n}, m)_b = \vert\{i \colon i \in [1, n], h_i \bmod m = b\}\vert$ is the number of hashes falling into bucket $b$, for all $b \in [0,m-1]$.
 \end{definition}
 
-Next, we define the cost of hash values at a given number of buckets to be the expected number of comparisons one has to make to find the value associated with a key present in the hash table.
+Next, we define the cost of hash values at a given number of buckets to be the expected number of comparisons one has to make to find the value associated with a key present.
 For a single bucket with $c_b$ hashes, this is $(c_b+1)/2$ assuming a uniform distribution over the keys being looked up.
 
 \begin{definition}[Cost of Hashes]
@@ -369,7 +362,7 @@ We say the hashes $h_{1:n}$ are perfectly distributed in $m$ buckets if $m - (n 
 
 %% KLUDGE: restatable add extra vertical space here for some reason.
 \vspace{-\groundskip}
-\begin{restatable}{proposition}{propperfecthasheshaveminimalcost}[Perfect Hashes have Minimal Cost]
+\begin{restatable}{proposition}{propperfecthasheshaveminimalcost}[Minimal Cost]
 Let $U(n,m)$ be the bucket count vector of any perfect hash of $n$ keys and $m$ buckets.
 Let $q=\floor{n/m}$ and $r=n \bmod m$.
 Then,
@@ -379,7 +372,6 @@ C(U(n,m)) = (m-r)\frac{q(q+1)}{2n} + r\frac{(q+1)(q+2)}{2n},
 and this cost is minimal.
 \end{restatable}
 \noindent For the proof of this and other propositions, see \Cref{sec:proofs}.
-
 In the illustrative special case of an integer load factor $n/m$, we have that $n=qm$ (i.e. $r = 0$), the counts will be the same for all buckets, and $C(U(n,m)) = m\frac{q(q+1)}{2n} = \frac{q+1}{2}$.
 
 Since perfect hashes have minimal cost, we define the regret of a hash the excess cost over that.
@@ -395,7 +387,8 @@ Note that the classic cost model in \Cref{def:cost-of-hashes} is simple but clea
 Still, with random hashes of many bits, this distinction becomes moot for regret because only one cached hash is likely to match, so there will be a single comparison for each lookup, and their contributions to $C(c(h_{1:n},m))$ and $C(U(n,m))$ cancel out.
 Thus, with cached hashes, the regret can be interpreted to be in terms of memory access.
 
-Hash functions strive to be indistinguishable with reasonable effort from a uniform hash \citep{10.5555/1213024}, which assigns each key to a bucket with uniform probability, whose cost we consider next.
+Hash functions strive to mimic the uniform hash \citep{10.5555/1213024}, which assigns keys to buckets with equal probability.
+We consider the cost of this ideal next.
 
 \begin{restatable}{proposition}{propexpectedcostofuh}[Expected Cost of the Uniform Hash]
 \label{prop:expected-cost-of-uh}
@@ -416,16 +409,17 @@ Next, we characterize its regret, assuming that $m \mid n$, for convenience.
 For all load factors $q \in \natnum$ ($n=qm$), the expected regret of the uniform hash is $0.5 + \frac{1}{m}$.
 \end{restatable}
 
-So, the uniform hash needs about one extra comparison per two lookups compared to a perfect hash because it does not take all the keys into account.
-That's not good but not terrible either.
-It may be worth improving, especially if the hash function can be made faster at the same time.
+So, the uniform hash wastes $0.5$ comparisons per lookup compared to a perfect hash because only considers a single actual key.
+This may be worth improving, especially if the hash function can be made faster at the same time.
 
 
 \section{Half an Example}
 \label{sec:half-an-example}
 
 \begin{algorithm}[t]
-  \caption{\small Hashing strings with a $\mathit{limit}$ on the number of characters taken into account. The algorithm moves inwards from the two ends of the string because those tend to be the most informative and because this scheme can be easily extended to reuse a previously computed hash with a lower limit. The function $\mathit{add\_char}$ performs one step of the FNV-1A algorithm.}
+  \caption{\small Hashing strings with a $\mathit{limit}$ on the number of characters taken into account.
+The algorithm moves inwards from the two ends of the string because those tend to be the most informative and because this scheme can be easily extended to reuse a previously computed hash with a lower limit.
+The function $\mathit{add\_char}$ performs one step of the FNV-1A algorithm.}
   \label{alg:string-hash}
   \hrule
   \begin{algorithmic}[1]
@@ -460,7 +454,7 @@ Hashing proceeds inwards alternating between taking a character from the beginni
 The algorithm (FNV-1A \citep{enwiki:1215467221}) is initialized with the length of the string to cheaply introduce some information about the truncated away characters into the hash.
 See \Cref{alg:string-hash} for the code listing.
 
-To detect overly severe truncation, we track the maximum chain length.
+As a heuristic to detect overly severe truncation, we track the maximum chain length.
 That is, when a new key is being inserted whose hash is computed with truncation (e.g. it's a string longer than the current limit), we check the number of keys already in its bucket.
 If the probability of that many keys having collided with the uniform hash (without truncation) is less than 1\%, we double the limit and rehash.
 Since hashes of strings are expensive to compute, they are cached (see \Cref{alg:puthash,sec:the-case-for-adaptive-hashing,sec:sbcl-hash-tables}).
@@ -547,6 +541,19 @@ Note the log scales. The plot shows the \emph{average} time for inserting a new 
 \label{fig:string-existing-regret}
 \end{figure}
 
+If there are significantly more collisions after this rehash than would be expected with the uniform hash, then we double the limit again and rehash.
+This procedure repeats until the number of collisions falls near the expected level (see \Cref{sec:number-of-collisions} for the details of our approximation) or there are no more keys with truncated hashes\footnote{We use the highest bit in the hash to indicate truncation.}.
+
+\subsection{Experiments with String Keys}
+\label{sec:experiments-with-string-keys}
+
+We implemented adaptive hashing in SBCL's standard \lisp{equal} hash tables\footnote{Common Lisp's \lisp{equal} is like Java's \texttt{.equals()}: it compares two objects by value.}.
+Then, we collected all different strings present in the running Lisp, which gave us about \num{40000} keys and measured the time it takes to populate hash tables from an empty state, averaging over same-sized random subsets of the keys.
+We partitioned the range of possible key counts into maximally large segments within which the hash table internal data structures are not resized and measured performance with the lowest and highest possible key count in each segment.
+We also measured the time it takes to look up an existing key (GET), to look up a key not in the hash table (MISS), and to delete an existing key (DEL).
+All reported times are in nanoseconds per operation (e.g. insertions for populating the table, lookups for GET).
+For details of the experimental setup, see \Cref{sec:microbenchmarking-methodology}.
+
 \begin{figure}[t]
 \figstringexistingput
 \label{fig:string-existing-put}
@@ -556,19 +563,6 @@ Note the log scales. The plot shows the \emph{average} time for inserting a new 
 \figstringexistingget
 \label{fig:string-existing-get}
 \end{figure}
-
-If there are significantly more collisions after this rehash than would be expected with the uniform hash, then we double the limit again and rehash.
-This procedure repeats until the number of collisions falls near the expected level (see \Cref{sec:number-of-collisions} for the details of our approximation) or there are no more keys with truncated hashes\footnote{We use the highest bit in the hash to indicate truncation.}.
-
-\subsection{Experiments with String Keys}
-\label{sec:experiments-with-string-keys}
-
-We implemented the adaptive hash algorithm by changing SBCL's standard \lisp{equal} hash tables\footnote{Common Lisp's \lisp{equal} is like Java's \texttt{.equals()}: it compares two objects by value.}.
-Then, we collected all different strings present in the running Lisp, which gave us about \num{40000} keys and measured the time it takes to populate hash tables from an empty state, averaging over same-sized random subsets of the keys.
-We partitioned the range of possible key counts into maximally large segments within which the hash table internal data structures are not resized and measured performance with the lowest and highest possible key count in each segment.
-We also measured the time it takes to look up an existing key (GET), to look up a key not in the hash table (MISS), and to delete an existing key (DEL).
-All reported times are in nanoseconds per operation (e.g. insertions for populating the table, lookups for GET).
-For details of the experimental setup see \Cref{sec:microbenchmarking-methodology}.
 
 \Cref{fig:string-existing-regret,fig:string-existing-put,fig:string-existing-get} show our results.
 The jaggedness of the lines is the effect of hash table resizing.
@@ -625,7 +619,7 @@ A thread may have multiple pages assigned to it, in which case it may choose bet
 In particular, TCMalloc allocates pages of 8KB by default and has allocations of roughly the same size within the same page.
 SBCL, a Common Lisp implementation with a moving garbage collector (GC), has two 32KB pages per thread: one for conses (whose size is two machine words), and another for all other objects\footnote{This is a simplification. Some platforms also have immobile space, arenas, and ``large'' objects are handled specially.}.
 
-Under such allocators, if the hash table keys are of the same size and are allocated in a tight loop, we can expect to have roughly arithmetic progressions in terms of addresses.
+Under such allocators, if the keys are of the same size and are allocated in a tight loop, we can expect their addresses to roughly follow an arithmetic progression.
 But only roughly because with TCMalloc there may be holes (that belonged to previously freed objects) on the page, which may be filled in a more irregular pattern, and when a page is full, the new page may be anywhere in memory.
 With SBCL, pages have no holes because allocation within a page is simply a pointer bump\footnote{The address of the next object is the address of the previously allocated object plus its size aligned to a double word boundary.} and because the GC compacts.
 When there is not enough room left on the current page or GC happens, the allocator gets a new page, but the addresses of subsequent pages are much less regular than the address within pages.
@@ -1138,6 +1132,7 @@ We thank Christophe Rhodes, Miloš Stanojević, Andrew Senior, Paul-Virak Khuong
 \appendix
 
 
+\newpage
 \section{Proofs}
 \label{sec:proofs}
 
@@ -1171,9 +1166,9 @@ Then,
 \E_{\pi_{1:qm}} &R(\pi_{1:qm}(k_{1:qm}), m)\\
 &= \E_{\pi_{1:qm}}\bigl[C\bigl(c(\pi_{1:qm}(k_{1:qm}),m)\bigr) - C\bigl(U(n,m)\bigr)\bigr]\\
 &= 1+\frac{qm-1}{2m} - \frac{q+1}{2}\\
-&= 0.5 + \frac{1}{m}.
-\qedhere
+&= 0.5 + \frac{1}{m},
 \end{align*}
+which concludes the proof.
 \end{proof}
 
 \propexpectedcostofpointermix*
@@ -1217,7 +1212,7 @@ Holding the load factor $f=n/m$ constant, the proportion of unused buckets is mo
 \lim_{m \to \infty} \E \frac{u}{m} = \lim_{m \to \infty} \E \piggl(\biggl(1-\frac{1}{m}\biggr)^m\piggr)^{n/m} = \exp\biggl(-\frac{n}{m}\biggr) = e^{\neg f},
 \end{align*}
 using the product limit formula of the exponential function.
-As the first three plots in the following figure show, this asymptotic formula is a very tight upper bound even for small $m$.
+As the first three plots in \Cref{fig:collision-bounds} show, this asymptotic formula is a very tight upper bound even for small $m$.
 
 \begin{figure}[t]
 \begin{tikzpicture}
@@ -1240,6 +1235,7 @@ As the first three plots in the following figure show, this asymptotic formula i
 \end{tikzpicture}
 \caption{Expected proportion of empty buckets with the uniform hash given a load factor (always in $[0,1]$) with the two smallest possible hash table sizes ($m=8$ and $m=16$), the tight upper bound $e^{\neg f}$.
 The $e^{\neg f} / 0.9$ adds some slack, while $1-\nicefrac{9}{16}f$ and $1-f/2$ provide increasingly looser but cheaper to compute upper bounds for small hash tables.}
+\label{fig:collision-bounds}
 \end{figure}
 
 However, $e^{\neg f}$ involves a division and an evaluation of the exponential function.
@@ -1376,7 +1372,6 @@ Equal*             & 25.257  &     0.03\% &  24.256 &     0.02\%
 Finally, with fewer than 100 keys, timing granularity is a limiting factor, so we allocate a number of hash tables (plus the two key sets for each, the second being for MISS) and measure the total time it takes to e.g. populate them.
 The number of hash tables is chosen such that the total number of keys is at least 100.
 This is a low enough number that the total memory footprint of the allocated hash tables stays below 32KB, the CPU's L1 cache size in our benchmarking environment.
-
 SBCL had a 16GB heap.
 
 

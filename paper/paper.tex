@@ -234,25 +234,6 @@ densely dashdotted,every mark/.append style={solid, fill=gray},mark=diamond*\\%
 
 \usepackage{environ}
 
-\NewEnviron{sourcefigure}[1][htbp]{%
-  {\let\caption\relax\let\ref\relax
-   \renewcommand{\label}[1]{%
-    \gdef\sfname{sf:##1}}%
-    \setbox1=\hbox{\BODY}}% Capture \label
-    \global\expandafter\let\csname\sfname\endcsname\BODY% Capture entire figure
-  \begin{figure}[#1]
-    \BODY
-  \end{figure}
-}
-\newcommand{\reusefigure}[2][htbp]{%
-  {\addtocounter{figure}{-1}%
-   \renewcommand{\theHfigure}{dupe-fig}% If you're using hyperref
-   \renewcommand{\thefigure}{\ref{#2}}% Figure counter is \ref
-   %\renewcommand{\thefigure}{\ref{#2} (repeated)}% Figure counter + "(repeated)"
-   \renewcommand{\addcontentsline}[3]{}% Avoid placing figure in LoF
-   \renewcommand{\label}[1]{}% Make \label inactive
-   \begin{figure}[#1] \csname sf:#2\endcsname \end{figure}}
-}
 
 
 \begin{document}
@@ -494,7 +475,7 @@ If the probability of that many keys having collided with the uniform hash (with
 Since hashes of strings are expensive to compute, they are cached (see \Cref{alg:puthash,sec:the-case-for-adaptive-hashing,sec:sbcl-hash-tables}).
 By compromising the hash function's quality, we run the risk of having to perform more comparisons, which can be costly, thus, it is important to have a tight limit on the chain length, which we achieve by precomputing them for all possible power-of-2 bucket counts at load factor 1 and changing the current limit when the hash table is resized.
 
-\begin{sourcefigure}[t]
+\newcommand\figstringexistingregret{
 \begin{tikzpicture}
   \begin{axis}[xlabel=number of keys, ylabel=regret,
       xmin=1, xmode=log, log basis x={2},
@@ -522,10 +503,9 @@ By compromising the hash function's quality, we run the risk of having to perfor
 Adaptive does not gain or significantly compromise on regret.
 Points where the truncation limit changes vary between runs.}
 \Description{}
-\label{fig:string-existing-regret}
-\end{sourcefigure}
+}
 
-\begin{sourcefigure}[t]
+\newcommand\figstringexistingput{
 \begin{tikzpicture}
   \begin{axis}[ylabel=ns / put,
       xmin=1, xmode=log, log basis x={2},
@@ -548,10 +528,9 @@ Points where the truncation limit changes vary between runs.}
 \caption{PUT timings in nanoseconds with string keys.
 Note the log scales. The plot shows the \emph{average} time for inserting a new key when populating an empty hash table with a given number of keys.}
 \Description{}
-\label{fig:string-existing-put}
-\end{sourcefigure}
+}
 
-\begin{sourcefigure}[t]
+\newcommand\figstringexistingget{
 \begin{tikzpicture}
   \begin{semilogxaxis}[ylabel=ns / get,
       xmin=1, xmode=log, log basis x={2},
@@ -573,8 +552,22 @@ Note the log scales. The plot shows the \emph{average} time for inserting a new 
 \end{tikzpicture}
 \caption{GET timings with string keys.}
 \Description{}
+}
+
+\begin{figure}[t]
+\figstringexistingregret
+\label{fig:string-existing-regret}
+\end{figure}
+
+\begin{figure}[t]
+\figstringexistingput
+\label{fig:string-existing-put}
+\end{figure}
+
+\begin{figure}[t]
+\figstringexistingget
 \label{fig:string-existing-get}
-\end{sourcefigure}
+\end{figure}
 
 If there are significantly more collisions after this rehash than would be expected with the uniform hash, then we double the limit again and rehash.
 This procedure repeats until the number of collisions falls near the expected level (see \Cref{sec:number-of-collisions} for the details of our approximation) or there are no more keys with truncated hashes\footnote{We use the highest bit in the hash to indicate truncation.}.
@@ -796,7 +789,7 @@ However, because Prefuzz is somewhat robust and considerably faster than Murmur3
 Using the tighter limit from \Cref{sec:half-an-example} would be too costly for \lisp{eq} hashing.
 See \Cref{sec:implementation-details} for the more details.
 
-\begin{sourcefigure}[t]
+\newcommand\figfixnumprogoneregret{
 \tikzpicturedependsonfile{data/fixnum-prog-1-murmur}
 \tikzpicturedependsonfile{data/fixnum-prog-1-prefuzz}
 \tikzpicturedependsonfile{data/fixnum-prog-1-flat}
@@ -840,10 +833,9 @@ Prefuzz is aggressively optimized for small sizes.
 Adaptive (\Cref{alg:rehash-eq}) is a perfect hash here.
 Both Co+Pr (Constant followed by Prefuzz) and Adaptive use the Constant hash until the fixed switch point at 32 keys (black dot).}
 \Description{}
-\label{fig:fixnum-prog-1-regret}
-\end{sourcefigure}
+}
 
-\begin{sourcefigure}[t]
+\newcommand\figfixnumprogoneput{
 \tikzpicturedependsonfile{data/fixnum-prog-1-murmur}
 \tikzpicturedependsonfile{data/fixnum-prog-1-prefuzz}
 \tikzpicturedependsonfile{data/fixnum-prog-1-flat}
@@ -879,10 +871,9 @@ Both Co+Pr (Constant followed by Prefuzz) and Adaptive use the Constant hash unt
 Prefuzz outperforms Murmur even at large sizes despite higher regret because it's friendlier to the cache (its collisions are between subsequent elements of the progression), and its combination with Constant is even faster.
 Thus, despite being a perfect hash, Adaptive can improve on them only marginally.}
 \Description{}
-\label{fig:fixnum-prog-1-put}
-\end{sourcefigure}
+}
 
-\begin{sourcefigure}[t]
+\newcommand\figfixnumprogoneget{
 \begin{tikzpicture}
   \begin{axis}[ylabel=ns / get,
       xmin=1, xmode=log, log basis x={2},
@@ -919,8 +910,22 @@ Thus, despite being a perfect hash, Adaptive can improve on them only marginally
 Keys are queried in random order so regret matters more here than with PUT, but the cache-friendliness of Prefuzz still keeps it ahead of Murmur.
 As expected, Adaptive can finally benefit from its zero regret after the Constant hash phase.}
 \Description{}
+}
+
+\begin{figure}[t]
+\figfixnumprogoneregret
+\label{fig:fixnum-prog-1-regret}
+\end{figure}
+
+\begin{figure}[t]
+\figfixnumprogoneput
+\label{fig:fixnum-prog-1-put}
+\end{figure}
+
+\begin{figure}[t]
+\figfixnumprogoneget
 \label{fig:fixnum-prog-1-get}
-\end{sourcefigure}
+\end{figure}
 
 In summary, we have two ways of detecting when the current hash function is likely suboptimal: tracking collisions at rehash and chain length at insertion.
 We use collision tracking to catch gradual degradations of performance, and max-chain-length to catch catastrophic failures in a single bucket.
@@ -938,7 +943,7 @@ Our experimental methodology is the same as in \Cref{sec:experiments-with-string
 In the experiments, Co+Pr starts with the Constant hash and switches to Prefuzz above 32 keys.
 Adaptive behaves as described in \Cref{alg:rehash-eq}.
 
-\begin{sourcefigure}[t]
+\newcommand\figfloatprogoneregret{
 \begin{tikzpicture}
   \begin{axis}[xlabel=number of keys, ylabel=regret,
       xmin=1, xmode=log, log basis x={2},
@@ -979,10 +984,9 @@ Adaptive detects these constant low bits and does better than Uniform until vari
 This is a spectacularly bad idea in this scenario, and the high number of collisions causes an immediate switch to Murmur.
 The switch times vary by hash table because the key sets are generated starting from random offsets.}
 \Description{}
-\label{fig:float-prog-1-regret}
-\end{sourcefigure}
+}
 
-\begin{sourcefigure}[t]
+\newcommand\figfixnumprogtwelveregret{
 \begin{tikzpicture}
   \begin{axis}[xlabel=number of keys, ylabel=regret,
       xmin=1, xmode=log, log basis x={2},
@@ -1020,8 +1024,7 @@ The switch times vary by hash table because the key sets are generated starting 
 Murmur closely tracks Uniform, but Prefuzz is better across almost the whole range.
 Arithmetic (\Cref{sec:the-arithmetic-hash}) would be a perfect hash here, but Adaptive, which uses Pointer-Shift (\Cref{sec:the-pointer-shift-hash}), is not quite perfect due to the interference of its $k \gg \mathrm{PB}$ term.}
 \Description{}
-\label{fig:fixnum-prog-12-regret}
-\end{sourcefigure}
+}
 
 \begin{itemize}
 \item{(\texttt{FIXNUM} \texttt{:PROG 1})}
@@ -1052,12 +1055,20 @@ Results in \Cref{sec:results-for-fixnum-rnd-6} shows that Prefuzz is better than
 \item{(\texttt{CONS} \texttt{:RND 6})}
 Similar to \texttt{FIXNUM} \texttt{:RND 6}, but we allocate real \lisp{cons} objects.
 See \Cref{sec:results-for-cons-rnd-6} for the results.
+\begin{figure}[t]
+\figfloatprogoneregret
+\label{fig:float-prog-1-regret}
+\end{figure}
 
 \item{(\texttt{SYMBOL} \texttt{:EXISTING})}
 Finally, we explore the case where keys are not allocated a tight loop that populates the hash table by using the set of existing \lisp{symbol}s from Lisp as keys.
 \Cref{sec:results-for-symbol-existing} shows that despite the scarcity of structure in the key distribution, Prefuzz maintains a small advantage over Murmur.
 As expected, Co+Pr and Adaptive follow in suite, most of their advantage being in the Constant hash phase.
 \end{itemize}
+\begin{figure}[t]
+\figfixnumprogtwelveregret
+\label{fig:fixnum-prog-12-regret}
+\end{figure}
 
 In all results presented, the Co+Pr and Adaptive hash functions, which both start out with the Constant hash, gain a lot of performance on insertion but lose on lookups.
 This is still an overall win based just on the numbers presented here except in very lookup-heavy workloads.
@@ -1441,11 +1452,22 @@ This includes names of symbols, packages, docstrings, etc.
 The 10th and 90th percentiles of the distribution of the string lengths is 7 and 39.
 The MISS key set consists of random strings with length sampled uniformly from the $[4,44]$ interval.
 
-\reusefigure[H]{fig:string-existing-regret}
-\reusefigure[H]{fig:string-existing-put}
-\reusefigure[H]{fig:string-existing-get}
+\begin{figure}[H]
+\figstringexistingregret
+\label{fig:string-existing-regret-2}
+\end{figure}
 
-\begin{figure}[t]
+\begin{figure}[H]
+\figstringexistingput
+\label{fig:string-existing-put-2}
+\end{figure}
+
+\begin{figure}[H]
+\figstringexistingget
+\label{fig:string-existing-get-2}
+\end{figure}
+
+\begin{figure}[H]
 \begin{tikzpicture}
   \begin{semilogxaxis}[ylabel=ns / miss,
       xmin=1, xmode=log, log basis x={2},
@@ -1504,9 +1526,20 @@ Keys form  an arithmetic progression with difference \texttt{1} starting from a 
 We also generate a set of keys not in the hash table for MISS, by using another, suitable offset (so that the two sets are disjunct).
 For GET, MISS, and DEL, keys are presented in random order.
 
-\reusefigure[H]{fig:fixnum-prog-1-regret}
-\reusefigure[H]{fig:fixnum-prog-1-put}
-\reusefigure[H]{fig:fixnum-prog-1-get}
+\begin{figure}[H]
+\figfixnumprogoneregret
+\label{fig:fixnum-prog-1-regret-2}
+\end{figure}
+
+\begin{figure}[H]
+\figfixnumprogoneput
+\label{fig:fixnum-prog-1-put-2}
+\end{figure}
+
+\begin{figure}[H]
+\figfixnumprogoneget
+\label{fig:fixnum-prog-1-get-2}
+\end{figure}
 
 \begin{figure}[H]
 \tikzpicturedependsonfile{data/fixnum-prog-1-murmur}
@@ -1594,7 +1627,10 @@ For GET, MISS, and DEL, keys are presented in random order.
 
 Keys are generated as in \Cref{sec:results-for-fixnum-prog-1}, but the \lisp{fixnum} values are converted to \lisp{single-float}.
 
-\reusefigure[H]{fig:float-prog-1-regret}
+\begin{figure}[H]
+\figfloatprogoneregret
+\label{fig:float-prog-1-regret-2}
+\end{figure}
 
 \begin{figure}[H]
 \begin{tikzpicture}
@@ -1748,7 +1784,10 @@ Keys are generated as in \Cref{sec:results-for-fixnum-prog-1}, but the \lisp{fix
 
 Same as \texttt{FIXNUM} \texttt{:PROG 1}, but with a difference of 12.
 
-\reusefigure[H]{fig:fixnum-prog-12-regret}
+\begin{figure}[H]
+\figfixnumprogtwelveregret
+\label{fig:fixnum-prog-12-regret-2}
+\end{figure}
 
 \begin{figure}[H]
 \begin{tikzpicture}

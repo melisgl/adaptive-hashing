@@ -54,6 +54,9 @@
 \ccsdesc[500]{Information systems~Hashed file organization}
 
 
+\usepackage{scalerel}[2016/12/29]
+\usepackage{stackengine}
+\usepackage{nicefrac}
 \usepackage[normalem]{ulem}
 \usepackage{siunitx}
 \sisetup{detect-all}
@@ -74,6 +77,9 @@
 
 \newcommand*\lisp[1]{\texttt{#1}}
 
+\let\leq\leqslant
+\let\geq\geqslant
+\renewcommand{\neg}{\protect\hstretch{0.8}{-}}
 \DeclareMathOperator*{\argmax}{arg\,max}
 \DeclareMathOperator*{\argmin}{arg\,min}
 \DeclarePairedDelimiter{\ceil}{\lceil}{\rceil}
@@ -103,9 +109,32 @@
 \makeatother
 
 
+%%%% Math: Paren size between \big and \Big
+%https://tex.stackexchange.com/a/483979
+
+\newcommand\pig[1]{\scalerel*[5.5pt]{\Big#1}{%
+  \ensurestackMath{\addstackgap[1.55pt]{\big#1}}}}
+\newcommand\pigl[1]{\mathopen{\pig{#1}}}
+\newcommand\pigr[1]{\mathclose{\pig{#1}}}
+
+%%% ... and between \Big and \bigg
+\newcommand\Pig[1]{\scalerel*[5.5pt]{\bigg#1}{%
+  \ensurestackMath{\addstackgap[1.55pt]{\Big#1}}}}
+\newcommand\Pigl[1]{\mathopen{\Pig{#1}}}
+\newcommand\Pigr[1]{\mathclose{\Pig{#1}}}
+
+%%% ... and between \bigg and \Bigg
+\newcommand\pigg[1]{\scalerel*[5.5pt]{\Bigg#1}{%
+  \ensurestackMath{\addstackgap[1.55pt]{\bigg#1}}}}
+\newcommand\piggl[1]{\mathopen{\pigg{#1}}}
+\newcommand\piggr[1]{\mathclose{\pigg{#1}}}
+
+
 \usepackage{color}
 \usepackage{xcolor}
-\definecolor{mglred}{RGB}{0,0,0}
+\definecolor{mglred}{RGB}{165,30,30}
+\definecolor{mglgreen}{RGB}{37,125,49}
+\definecolor{mglblue}{RGB}{65,48,163}
 
 
 %%%% Tikz and Pgfplots
@@ -1185,45 +1214,56 @@ Given $n$ keys, $m$ buckets, and hash values $h_{1:n}$, let $c$ and $u$ be the n
 The number of used buckets $m-u$ is equal to the number of non-colliding keys $n-c$, so $c=u+n-m$ and it suffices to bound $u$ to bound $c$.
 Appealing to the birthday problem \citep{siegrist1197random}, the expected number of unused buckets is
 \begin{align*}
-\E u = m \biggl(1-\frac{1}{m}\biggr)^n.
+\smash[t]{\E u = m \biggl(1-\frac{1}{m}\biggr)^n}.
 \end{align*}
-Holding the load factor $f=n/m$ constant, the  proportion of unused buckets is monotonically increasing in $m$ and
+Holding the load factor $f=n/m$ constant, the proportion of unused buckets is monotonically increasing in $m$ and
 \begin{align*}
-\lim_{m \to \infty} \E \frac{u}{m} = \lim_{m \to \infty} \E \Biggl(\biggl(1-\frac{1}{m}\biggr)^m\Biggr)^{n/m} = \exp\biggl(-\frac{n}{m}\biggr) = \exp(-f),
+\lim_{m \to \infty} \E \frac{u}{m} = \lim_{m \to \infty} \E \piggl(\biggl(1-\frac{1}{m}\biggr)^m\piggr)^{n/m} = \exp\biggl(-\frac{n}{m}\biggr) = e^{\neg f},
 \end{align*}
 using the product limit formula of the exponential function.
+As the first three plots in the following figure show, this asymptotic formula is a very tight upper bound even for small $m$.
 
-\begin{figure}[H]
+\begin{figure}[t]
 \begin{tikzpicture}
-  \begin{axis}[xmin=0, xmax=1, xlabel=load factor $f$,
+  \begin{axis}[xmin=0, xmax=1, ymax=1, xlabel=load factor $f$,
       ylabel=proportion of empty buckets]
-    \addplot[orange, thick, domain=0:1] {0.875^(8*x)};
+    \addplot[mglred, thick, domain=0:1] {0.875^(8*x)};
     \addlegendentry{$m=8$};
-    \addplot[red, dashed, thick, domain=0:1] {0.9375^(16*x)};
+    \addplot[orange, dashed, thick, domain=0:1] {0.9375^(16*x)};
     \addlegendentry{$m=16$};
-    \addplot[blue, dashdotted, thick, domain=0:1] {e^(-x)};
-    \addlegendentry{$\exp(-f)$};
-    \addplot[violet, dotted, thick, domain=0:1] {1-0.5*x};
+    \addplot[mglgreen, densely dashdotted, thick, domain=0:1] {e^(-x)};
+    \addlegendentry{$e^{\neg f}$};
+    \addplot[mglgreen!50!cyan, loosely dashdotted, thick, domain=0:1] {e^(-x)/0.9};
+    \addlegendentry{$e^{\neg f} / 0.9$};
+    \addplot[cyan, densely dotted, thick, domain=0:1] {1-9/16*x};
+    \addlegendentry{$1-\nicefrac{9}{16}f$};
+      legend style={font=\small}]
+    \addplot[mglblue, dotted, thick, domain=0:1] {1-0.5*x};
     \addlegendentry{$1-f/2$};
   \end{axis}
 \end{tikzpicture}
-\caption{Expected proportion of empty buckets with the uniform hash given a load factor with the two smallest possible hash table sizes ($m=8$ and $m=16$), the tight upper bound $\exp(-f)$, and the loose but cheap upper bound $1-f/2$ used for small sizes.}
-\Description{}
+\caption{Expected proportion of empty buckets with the uniform hash given a load factor (always in $[0,1]$) with the two smallest possible hash table sizes ($m=8$ and $m=16$), the tight upper bound $e^{\neg f}$.
+The $e^{\neg f} / 0.9$ adds some slack, while $1-\nicefrac{9}{16}f$ and $1-f/2$ provide increasingly looser but cheaper to compute upper bounds for small hash tables.}
 \end{figure}
 
-Based on this upper bound, for small \lisp{eq} and all {equal} hash tables, we use the test $m\exp(-f) < 0.9u$ (where $u=m+c-n$) to indicate whether the expected number of unused buckets (hence collisions) is too high.
-
-For \lisp{eq} hash tables when $m<2048$, we use a faster to compute and looser upper bound.
-In SBCL's hash table implementation, the load factor cannot exceed 1, so we only need to consider the $[0,1]$ interval.
-In this interval, $\exp(-f) \leqslant 1-f/2$.
-Then, from $\E \frac{u}{m} \leqslant \exp(-f)$, we have that
+However, $e^{\neg f}$ involves a division and an evaluation of the exponential function.
+This overhead is measurable at small hash table sizes.
+It is also at small sizes that the hash table is more likely to fit in the cache; thus, the cost of collisions is also smaller, and we may allow more slack.
+In practice, we test for too many collisions with the following conditions:
+\begin{itemize}
+\item $1-f/2 < \frac{u}{m}$ for $m < 1024$;
+\item $1-\nicefrac{9}{16}f < \frac{u}{m}$ for $1024 \leq m < 4096$;
+\item $e^{\neg f} / 0.9 < \frac{u}{m}$ for $4096 \leq m$.
+\end{itemize}
+Crucially, $1 - f/2 < \frac{u}{m}$ can be simplified as
 \begin{align*}
-\E \frac{u}{m} &\leqslant 1 - f/2\\
-\E u &\leqslant m - n/2\\
-\E c + m - n &\leqslant m - n/2\\
-\E c &\leqslant n/2.
+1 - f/2 &< \frac{u}{m} \\
+m - n/2 &< u \\
+m - n/2 &< c + m - n \\
+n/2 &< c,
 \end{align*}
-Since this upper bound is already quite loose at most load factors, we use $c > (n \gg 1)$ to test for too many collisions at small hash table sizes.
+which can be implemented with a single arithmetic shift and an integer comparison.
+Similarly, $1-\nicefrac{9}{16}f < \frac{u}{m}$ simplifies to $\nicefrac{7}{16} n < c$, which is equivalent to $(n \gg 1) - (n \gg 4) < c$, involving only two arithmetic shifts.
 
 
 \section{SBCL Hash Tables}

@@ -115,10 +115,12 @@
 \usepackage{pgfplots,tikz,pgfplotstable}
 \pgfplotsset{compat=1.9}
 \usetikzlibrary{positioning, fit, arrows.meta, shapes}
-\usetikzlibrary{external}
-\tikzexternalize[prefix=tikz/]
+%% When submitting to arxiv, turn off tikzexternalize and use the
+%% dummy \tikzpicturedependsonfile below.
+%% \usetikzlibrary{external}
+%% \tikzexternalize[prefix=tikz/]
 %% \tikzset{external/optimize command away=\AddToShipoutPictureBG}
-%% \newcommand\tikzpicturedependsonfile[1]{}
+\newcommand\tikzpicturedependsonfile[1]{}
 
 %https://tex.stackexchange.com/questions/84127/correctly-align-vertical-text-on-a-baseline-in-pgfplots
 \def\mystrut{\vphantom{hg}}
@@ -236,10 +238,9 @@ densely dashdotted,every mark/.append style={solid, fill=gray},mark=diamond*\\%
 We argue that the predominant approach of fixing the hash function for the lifetime of the hash table is suboptimal and propose adapting it to the current set of keys.
 In the prevailing view, good hash functions spread the keys ``randomly'' and are fast to evaluate.
 General-purpose ones (e.g. Murmur) are designed to do both while remaining agnostic to the distribution of the keys, which limits their bucketing ability and wastes computation.
-When these shortcomings are recognized, the user of the hash table may specify a hash function more tailored to the expected key distribution, but doing so almost always introduces an unbounded risk in case their assumptions do not bear out in practice.
+When these shortcomings are recognized, one may specify a hash function more tailored to some assumed key distribution, but doing so almost always introduces an unbounded risk in case this assumption does not bear out in practice.
 At the other, fully key-aware end of the spectrum, Perfect Hashing algorithms can discover hash functions to bucket a given set of keys optimally, but they are costly to run and require the keys to be known and fixed ahead of time.
-Our main conceptual contribution is that adapting the hash table's hash function to the keys online is necessary for the best performance, as
-adaptivity allows for better bucketing of keys \emph{and} faster hash functions.
+Our main conceptual contribution is that adapting the hash table's hash function to the keys online is necessary for the best performance, as adaptivity allows for better bucketing of keys \emph{and} faster hash functions.
 We instantiate the idea of online adaptation with minimal overhead and no change to the hash table API.
 The experiments show that the adaptive approach marries the common-case performance of weak hash functions with the robustness of general-purpose ones.}
 
@@ -1294,9 +1295,9 @@ The \lisp{pairs} vector is doubled in size as more keys are added, but no rehash
 Once the number of keys exceeds 32, $\mathit{count\_common\_prefix\_bits}$ (see \Cref{alg:detect-shift}) is invoked with 16 keys to guess the shift $s$, we switch to the normal SBCL hash table implementation, set the hash function to $\mathit{pointer\_shift}$ and rehash (\Cref{alg:rehash-eq}).
 Switching to the new hash function is implemented as replacing the GET, PUT, DEL implementations via their accessors.
 
-We added new hash table accessors for Murmur and added a new slot for the detected shift $s$ to the hash table structure.
-Instead of adding separate accessors for Pointer-Shift, which actually had the best performance in microbenchmarks, we made Pointer-Shift and Prefuzz share accessors, and to the inlined hash function we added an $\mathit{if} s = 0$ that dispatches to Prefuzz.
-This is to reduce pressure on the instruction cache, which is an important consideration in macrobenchmarks.
+We added new hash table accessors for Murmur and also a new slot for the detected shift $s$ to the hash table structure.
+Instead of adding separate accessors for Pointer-Shift, which actually had the best performance in microbenchmarks, we made Pointer-Shift and Prefuzz share accessors, and to the inlined hash function we introduced an $\mathit{if} s = 0$ test that dispatches to Prefuzz.
+This was intended to reduce pressure on the instruction cache, which is an important consideration in macrobenchmarks.
 To minimize the performance penalty on rehashing, we lift this dispatch out of the rehashing loop in the same way that dispatches to different accessors are.
 
 In \lisp{equal} hash tables, the truncation limit and the current max-chain-length are packed into a single machine integer and stored in the same slot that we used for $s$ in the \lisp{eq} case.

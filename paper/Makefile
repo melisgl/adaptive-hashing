@@ -16,4 +16,4 @@ distclean: clean
 	rm -f tikz/*.*
 
 arxiv:
-	tar cf ah-arxiv.tar *.tex *.sty *.bbl figure/*.png
+	tar cf ah-arxiv.tar *.tex *.sty *.bbl tikz/README data/*.tbl
